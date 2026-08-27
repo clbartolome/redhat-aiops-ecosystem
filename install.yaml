@@ -1,0 +1,24 @@
+- name: Installation
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+
+    - name: Setup kubeconfig file
+      ansible.builtin.include_role:
+        name: demos.utils.kubeconfig
+
+    - name: Create Demo namespaces
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: project.openshift.io/v1
+          kind: Project
+          metadata:
+            name: "{{ namespace.name }}"
+      loop: "{{ namespaces }}"
+      loop_control:
+        loop_var: namespace
+
+  vars_files:
+    - vars.yaml

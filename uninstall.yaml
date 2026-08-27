@@ -1,0 +1,26 @@
+---
+- name: Uninstallation
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+
+    - name: Setup kubeconfig file
+      ansible.builtin.include_role:
+        name: demos.utils.kubeconfig
+
+    - name: Delete Demo namespaces
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: project.openshift.io/v1
+          kind: Project
+          metadata:
+            name: "{{ namespace.name }}"
+      loop: "{{ namespaces }}"
+      ignore_errors: true
+      loop_control:
+        loop_var: namespace
+
+  vars_files:
+    - vars.yaml
