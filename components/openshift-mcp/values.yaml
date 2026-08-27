@@ -1,0 +1,36 @@
+openshift: true
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: http
+
+ingress:
+  enabled: false
+
+httpRoute:
+  enabled: false
+
+tls:
+  enabled: false
+
+serviceAccount:
+  create: true
+  automountToken: true
+  name: openshift-mcp
+
+rbac:
+  create: true
+  extraClusterRoleBindings:
+    - name: openshift-mcp-view
+      roleRef:
+        name: view
+        external: true
+
+extraArgs:
+  - --read-only
+  - --cluster-provider=in-cluster
+  - --toolsets=core,config,openshift
+  - --stateless

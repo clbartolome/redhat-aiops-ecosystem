@@ -1,0 +1,17 @@
+---
+- name: Uninstall OpenShift MCP server
+  kubernetes.core.helm:
+    name: openshift-mcp-server
+    release_namespace: "{{ openshift_mcp.namespace }}"
+    release_state: absent
+    wait: true
+
+- name: Delete OpenShift MCP project
+  kubernetes.core.k8s:
+    state: absent
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ openshift_mcp.namespace }}"
+  ignore_errors: true

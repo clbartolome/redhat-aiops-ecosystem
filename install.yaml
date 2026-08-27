@@ -8,17 +8,9 @@
       ansible.builtin.include_role:
         name: demos.utils.kubeconfig
 
-    - name: Create Demo namespaces
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: project.openshift.io/v1
-          kind: Project
-          metadata:
-            name: "{{ namespace.name }}"
-      loop: "{{ namespaces }}"
-      loop_control:
-        loop_var: namespace
+    - name: Install OpenShift MCP
+      ansible.builtin.include_tasks:
+        file: components/openshift-mcp/install.yaml
 
   vars_files:
     - vars.yaml

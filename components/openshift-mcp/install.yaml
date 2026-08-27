@@ -1,0 +1,24 @@
+---
+- name: Create OpenShift MCP project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ openshift_mcp.namespace }}"
+
+- name: Add OpenShift Helm charts repository
+  kubernetes.core.helm_repository:
+    name: openshift-helm-charts
+    repo_url: https://charts.openshift.io/
+
+- name: Install OpenShift MCP server
+  kubernetes.core.helm:
+    name: openshift-mcp-server
+    chart_ref: openshift-helm-charts/redhat-openshift-mcp-server
+    release_namespace: "{{ openshift_mcp.namespace }}"
+    release_state: present
+    update_repo_cache: true
+    values: "{{ lookup('file', playbook_dir ~ '/components/openshift-mcp/values.yaml') | from_yaml }}"
+    wait: true

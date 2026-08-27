@@ -1,8 +1,7 @@
 ---
-# Required namespaces (operators namespaces must NOT be also included here)
-namespaces:
-  - name: test
-
 kubeconfig:
   ocp_domain: "{{ ocp_host }}"
   ocp_api_token: "{{ api_token }}"
+
+openshift_mcp:
+  namespace: openshift-mcp

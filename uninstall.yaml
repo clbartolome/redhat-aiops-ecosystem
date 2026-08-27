@@ -9,18 +9,9 @@
       ansible.builtin.include_role:
         name: demos.utils.kubeconfig
 
-    - name: Delete Demo namespaces
-      kubernetes.core.k8s:
-        state: absent
-        definition:
-          apiVersion: project.openshift.io/v1
-          kind: Project
-          metadata:
-            name: "{{ namespace.name }}"
-      loop: "{{ namespaces }}"
-      ignore_errors: true
-      loop_control:
-        loop_var: namespace
+    - name: Uninstall OpenShift MCP
+      ansible.builtin.include_tasks:
+        file: components/openshift-mcp/uninstall.yaml
 
   vars_files:
     - vars.yaml
