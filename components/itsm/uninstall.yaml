@@ -1,0 +1,29 @@
+---
+- name: Delete itsm manifests
+  kubernetes.core.k8s:
+    state: absent
+    namespace: "{{ itsm.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+    wait: true
+  loop: "{{ query('fileglob', playbook_dir ~ '/components/itsm/crds/*.yaml') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Delete itsm-config secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: itsm-config
+    namespace: "{{ itsm.namespace }}"
+
+- name: Delete itsm project
+  kubernetes.core.k8s:
+    state: absent
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ itsm.namespace }}"
+  when: itsm.namespace != agent.namespace
+  ignore_errors: true

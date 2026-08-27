@@ -21,6 +21,10 @@
       ansible.builtin.include_tasks:
         file: components/agent/uninstall.yaml
 
+    - name: Uninstall ITSM
+      ansible.builtin.include_tasks:
+        file: components/itsm/uninstall.yaml
+
     - name: Uninstall OpenShift MCP
       ansible.builtin.include_tasks:
         file: components/openshift-mcp/uninstall.yaml

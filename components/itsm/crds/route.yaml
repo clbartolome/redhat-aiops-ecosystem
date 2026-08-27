@@ -1,0 +1,12 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: itsm-app
+  labels:
+    app: itsm-app
+spec:
+  to:
+    kind: Service
+    name: itsm-app
+  port:
+    targetPort: http

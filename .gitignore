@@ -1,2 +1,3 @@
 ansible-navigator/context/*
 
+vars.yaml

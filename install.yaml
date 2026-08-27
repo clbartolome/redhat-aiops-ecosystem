@@ -12,6 +12,10 @@
       ansible.builtin.include_tasks:
         file: components/openshift-mcp/install.yaml
 
+    - name: Install ITSM
+      ansible.builtin.include_tasks:
+        file: components/itsm/install.yaml
+
     - name: Install agent
       ansible.builtin.include_tasks:
         file: components/agent/install.yaml

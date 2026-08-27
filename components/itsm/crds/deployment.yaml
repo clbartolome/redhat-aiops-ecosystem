@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: itsm-app
+  labels:
+    app: itsm-app
+spec:
+  replicas: 1
+  # Recreate: SQLite + ReadWriteOnce PVC cannot attach to two pods during a rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: itsm-app
+  template:
+    metadata:
+      labels:
+        app: itsm-app
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: itsm-app
+          image: "{{ itsm.image }}"
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: itsm-config
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim:
+            claimName: itsm-data

@@ -1,0 +1,45 @@
+---
+- name: Create itsm project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ itsm.namespace }}"
+
+- name: Build itsm-config from templated env
+  ansible.builtin.set_fact:
+    itsm_config: "{{ itsm_config | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/itsm/.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create itsm-config secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: itsm-config
+        namespace: "{{ itsm.namespace }}"
+      type: Opaque
+      stringData: "{{ itsm_config }}"
+
+- name: Apply itsm manifests
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ itsm.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+  loop: "{{ query('fileglob', playbook_dir ~ '/components/itsm/crds/*.yaml') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Wait for itsm Deployment
+  kubernetes.core.k8s:
+    state: present
+    api_version: apps/v1
+    kind: Deployment
+    name: itsm-app
+    namespace: "{{ itsm.namespace }}"
+    wait: true
+    wait_timeout: 180
