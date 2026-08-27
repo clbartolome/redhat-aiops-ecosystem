@@ -12,5 +12,17 @@
       ansible.builtin.include_tasks:
         file: components/openshift-mcp/install.yaml
 
+    - name: Install agent
+      ansible.builtin.include_tasks:
+        file: components/agent/install.yaml
+
+    - name: Install chat
+      ansible.builtin.include_tasks:
+        file: components/chat/install.yaml
+
+    - name: Install monitor
+      ansible.builtin.include_tasks:
+        file: components/monitor/install.yaml
+
   vars_files:
     - vars.yaml

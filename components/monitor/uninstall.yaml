@@ -1,0 +1,29 @@
+---
+- name: Delete monitor manifests
+  kubernetes.core.k8s:
+    state: absent
+    namespace: "{{ monitor.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+    wait: true
+  loop: "{{ query('fileglob', playbook_dir ~ '/components/monitor/crds/*.yaml') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Delete monitor-config secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: monitor-config
+    namespace: "{{ monitor.namespace }}"
+
+- name: Delete monitor project
+  kubernetes.core.k8s:
+    state: absent
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ monitor.namespace }}"
+  when: monitor.namespace != agent.namespace
+  ignore_errors: true

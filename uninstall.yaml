@@ -9,6 +9,18 @@
       ansible.builtin.include_role:
         name: demos.utils.kubeconfig
 
+    - name: Uninstall monitor
+      ansible.builtin.include_tasks:
+        file: components/monitor/uninstall.yaml
+
+    - name: Uninstall chat
+      ansible.builtin.include_tasks:
+        file: components/chat/uninstall.yaml
+
+    - name: Uninstall agent
+      ansible.builtin.include_tasks:
+        file: components/agent/uninstall.yaml
+
     - name: Uninstall OpenShift MCP
       ansible.builtin.include_tasks:
         file: components/openshift-mcp/uninstall.yaml

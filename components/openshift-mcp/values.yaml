@@ -1,4 +1,5 @@
 openshift: true
+fullnameOverride: openshift-mcp-server
 
 replicaCount: 1
 

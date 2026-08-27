@@ -1,0 +1,13 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: monitor
+  labels:
+    app.kubernetes.io/name: monitor
+    app.kubernetes.io/component: monitor
+spec:
+  to:
+    kind: Service
+    name: monitor
+  port:
+    targetPort: http

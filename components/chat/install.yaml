@@ -1,0 +1,37 @@
+---
+- name: Create chat project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ chat.namespace }}"
+
+- name: Build chat-config from templated env
+  ansible.builtin.set_fact:
+    chat_config: "{{ chat_config | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/chat/.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create chat-config secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: chat-config
+        namespace: "{{ chat.namespace }}"
+      type: Opaque
+      stringData: "{{ chat_config }}"
+
+- name: Apply chat manifests
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ chat.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+    wait: true
+    wait_timeout: 180
+  loop: "{{ query('fileglob', playbook_dir ~ '/components/chat/crds/*.yaml') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
