@@ -33,5 +33,11 @@ rbac:
 extraArgs:
   - --read-only
   - --cluster-provider=in-cluster
-  - --toolsets=core,config,openshift
   - --stateless
+
+config:
+  toolsets:
+    - core
+    - config
+    - openshift
+    - kubevirt
