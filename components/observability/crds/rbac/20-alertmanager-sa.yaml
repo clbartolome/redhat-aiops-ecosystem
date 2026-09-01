@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alertmanager
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"

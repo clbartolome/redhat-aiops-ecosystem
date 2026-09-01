@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: kafka-bootstrap-tcp
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  jobName: observability-kafka-tcp
+  interval: 30s
+  prober:
+    url: blackbox-exporter.{{ aap_casc.aiops_demo_namespace }}.svc:9115
+    path: /probe
+    scheme: http
+  module: tcp_connect
+  targets:
+    staticConfig:
+      static:
+        - "{{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092"
+      labels:
+        component: kafka
+        namespace: "{{ observability.namespace }}"

@@ -1,0 +1,55 @@
+---
+- name: Disable MCP on Ansible Automation Platform instance
+  kubernetes.core.k8s:
+    state: present
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_mcp.instance_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+    merge_type: merge
+    definition:
+      spec:
+        mcp:
+          disabled: true
+
+- name: Delete AnsibleMCPServer instance
+  kubernetes.core.k8s:
+    state: absent
+    api_version: mcpserver.ansible.com/v1alpha1
+    kind: AnsibleMCPServer
+    name: "{{ aap_mcp.instance_name }}-mcp"
+    namespace: "{{ aap_mcp.namespace }}"
+  ignore_errors: true
+
+- name: Wait for AAP MCP Deployment removal
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ aap_mcp.instance_name }}-mcp"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_deployment
+  until: aap_mcp_deployment.resources | length == 0
+  retries: 30
+  delay: 10
+  ignore_errors: true
+
+- name: Wait for AAP MCP Route removal
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: "{{ aap_mcp.instance_name }}-mcp"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_route
+  until: aap_mcp_route.resources | length == 0
+  retries: 30
+  delay: 10
+  ignore_errors: true
+
+- name: Delete AAP MCP token secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_mcp.token_secret_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  ignore_errors: true

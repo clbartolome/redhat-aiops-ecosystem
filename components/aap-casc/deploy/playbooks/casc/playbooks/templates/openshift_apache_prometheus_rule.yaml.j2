@@ -1,0 +1,24 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ openshift_apache_monitoring_prometheus_rule_name | default('apache-http-probes') }}
+  namespace: {{ openshift_apache_monitoring_namespace | default(observability.namespace | default('observability')) }}
+  labels:
+    app.kubernetes.io/part-of: observability
+spec:
+  groups:
+    - name: apache-http.probes
+      interval: {{ openshift_apache_monitoring_probe_interval | default('30s') }}
+      rules:
+        - alert: {{ openshift_apache_monitoring_alert_name | default('ApacheApplicationDown') }}
+          expr: probe_success{job="{{ openshift_apache_monitoring_probe_job | default('apache-http') }}"} == 0
+          for: {{ openshift_apache_monitoring_probe_for | default('15s') }}
+          labels:
+            severity: critical
+            part_of: aiops-demo
+          annotations:
+            summary: Apache HTTP probe failed for {{ '{{ $labels.vm_name }}' }}
+            description: >-
+              Blackbox probe {{ '{{ $labels.instance }}' }} for VM
+              {{ '{{ $labels.vm_name }}' }} returned probe_success=0.

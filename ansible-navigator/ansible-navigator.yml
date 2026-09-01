@@ -10,7 +10,7 @@ ansible-navigator:
     console: false
   execution-environment:
     container-engine: podman
-    image: argo-playground-ee:latest
+    image: localhost/rh-aiops-ee:latest
     pull:
       policy: missing
   logging:

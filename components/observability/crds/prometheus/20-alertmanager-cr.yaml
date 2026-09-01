@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Alertmanager
+metadata:
+  name: "{{ observability.namespace }}"
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  replicas: 1
+  serviceAccountName: alertmanager
+  alertmanagerConfigSelector:
+    matchLabels:
+      alertmanagerConfig: "{{ observability.namespace }}"
+  alertmanagerConfigNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: "{{ observability.namespace }}"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

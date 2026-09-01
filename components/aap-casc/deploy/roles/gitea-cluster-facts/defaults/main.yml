@@ -1,0 +1,4 @@
+---
+gitea_cluster_facts_namespace: "{{ gitea.namespace | default('gitea') }}"
+gitea_cluster_facts_secret_name: gitea-secret
+gitea_cluster_facts_host_configmap_name: gitea-host-config

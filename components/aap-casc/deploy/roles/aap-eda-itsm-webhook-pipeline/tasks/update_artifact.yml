@@ -1,0 +1,16 @@
+---
+- name: Merge ITSM Kafka EDA facts into platform facts
+  ansible.builtin.set_fact:
+    aap_platform: >-
+      {{
+        aap_platform | combine({
+          'eda': (
+            aap_platform.eda | default({})
+            | combine({
+                'itsm_webhook_activation_name': aap_eda_itsm_webhook_pipeline_activation_name,
+                'kafka_topic_itsm': aap_eda_itsm_webhook_pipeline_kafka_topic_itsm,
+              })
+          )
+        }, recursive=True)
+      }}
+  no_log: true

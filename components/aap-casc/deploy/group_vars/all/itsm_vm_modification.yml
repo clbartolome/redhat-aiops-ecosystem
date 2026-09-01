@@ -1,0 +1,16 @@
+---
+# ITSM change-task names referenced by AAP VM modification workflow nodes.
+itsm_vm_cpu_modification_task_template_patch: AAP — Patch VM manifest (CPU)
+itsm_vm_memory_modification_task_template_patch: AAP — Patch VM manifest (Memory)
+itsm_vm_modification_task_template_restart_vm: AAP — Restart VM
+
+aap_vm_cpu_modification_survey_job_extra_vars:
+  vm_name: ""
+  cpus: ""
+
+aap_vm_memory_modification_survey_job_extra_vars:
+  vm_name: ""
+  mem: ""
+
+aap_vm_cpu_modification_job_extra_vars: "{{ aap_itsm_job_template_extra_vars | combine(aap_vm_cpu_modification_survey_job_extra_vars) }}"
+aap_vm_memory_modification_job_extra_vars: "{{ aap_itsm_job_template_extra_vars | combine(aap_vm_memory_modification_survey_job_extra_vars) }}"

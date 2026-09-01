@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: eda-api-http
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: eda
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  jobName: observability-eda-http
+  interval: 30s
+  prober:
+    url: blackbox-exporter.{{ aap_casc.aiops_demo_namespace }}.svc:9115
+    path: /probe
+    scheme: http
+  module: http_2xx
+  targets:
+    staticConfig:
+      static:
+        - http://{{ aap_casc.instance_name }}-eda-api.{{ aap_casc.namespace }}.svc:8000/
+      labels:
+        component: eda
+        namespace: "{{ aap_casc.namespace }}"

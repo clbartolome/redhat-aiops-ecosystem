@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: otel-webhook
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+    alertmanagerConfig: "{{ observability.namespace }}"
+spec:
+  route:
+    receiver: otel-collector
+    groupBy:
+      - alertname
+    groupWait: 10s
+    groupInterval: 30s
+    repeatInterval: 4h
+  receivers:
+    - name: otel-collector
+      webhookConfigs:
+        - url: http://otel-collector-upstream.{{ observability.namespace }}.svc:8090/v1/alerts
+          sendResolved: true
+          httpConfig:
+            basicAuth:
+              username:
+                name: otel-webhook-auth
+                key: ALERTMANAGER_USERNAME
+              password:
+                name: otel-webhook-auth
+                key: ALERTMANAGER_PASSWORD

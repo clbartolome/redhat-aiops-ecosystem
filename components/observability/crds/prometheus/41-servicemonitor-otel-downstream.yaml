@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector-downstream
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: otel-collector-downstream
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector-downstream
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

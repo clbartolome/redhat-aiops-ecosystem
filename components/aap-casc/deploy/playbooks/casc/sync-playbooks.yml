@@ -1,0 +1,41 @@
+---
+- name: Sync AIOps Playbooks to Gitea and refresh AAP project
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../group_vars/all/gitea_repos.yml
+    - ../../group_vars/all/aap_vm_pipeline.yml
+    - ../../group_vars/all/aap_casc.yml
+  vars:
+    gitea_use_cluster_secrets: true
+    gitea_repos_local_base: "{{ playbook_dir }}"
+    gitea_repos_sync_only:
+      - Playbooks
+  tasks:
+    - name: Discover AAP controller connection facts from OpenShift
+      ansible.builtin.include_role:
+        name: aap-controller-facts
+
+    - name: Push Playbooks repository to Gitea from local source
+      ansible.builtin.include_role:
+        name: gitea-repos
+
+    - name: Obtain AAP gateway OAuth token for project sync
+      ansible.builtin.include_role:
+        name: aap-controller
+      vars:
+        aap_controller_token_fact_name: aap_vm_pipeline_controller_oauthtoken
+
+    - name: Run AAP VM pipeline preflight checks
+      ansible.builtin.include_role:
+        name: aap-vm-pipeline
+        tasks_from: preflight.yml
+
+    - name: Refresh AIOps Playbooks project from Gitea SCM
+      environment:
+        CONTROLLER_OPTIONAL_API_URLPATTERN_PREFIX: "{{ aap_vm_pipeline_controller_api_prefix }}"
+      block:
+        - name: Update AIOps Playbooks project from SCM
+          ansible.builtin.include_role:
+            name: aap-vm-pipeline
+            tasks_from: project.yml

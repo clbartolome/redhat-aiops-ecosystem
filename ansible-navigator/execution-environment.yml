@@ -8,13 +8,19 @@ dependencies:
   galaxy:
     collections:
       - name: community.general
-      - name: https://github.com/clbartolome/demos.utils.git
+      - name: kubernetes.core
+        version: ">=5.0.0"
+      - name: awx.awx
+      - name: ansible.eda
+      - name: https://github.com/zaskan/demos.utils.git
         type: git
-        version: main
+        version: 1.0.2
 
 additional_build_steps:
   prepend_base:
     - RUN microdnf install -y tar gzip && curl -fsSL https://get.helm.sh/helm-v3.14.4-linux-amd64.tar.gz -o helm.tar.gz && tar -zxvf helm.tar.gz && mv linux-amd64/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm && rm -rf linux-amd64 helm.tar.gz && microdnf clean all
+  prepend_builder:
+    - RUN microdnf install -y python3.12-devel gcc systemd-devel && microdnf clean all
 
 
 options:

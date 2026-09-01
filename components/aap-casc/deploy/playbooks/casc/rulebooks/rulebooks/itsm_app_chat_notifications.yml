@@ -1,0 +1,36 @@
+---
+- name: ITSM outbound webhooks via Kafka
+  hosts: all
+  sources:
+    - name: listen for itsm events
+      ansible.eda.kafka:
+        host: observability-kafka-kafka-bootstrap.observability.svc
+        port: 9092
+        topic: aiops.itsm
+        group_id: eda-itsm-chat-notifications
+  rules:
+    - name: Post incident.created to chat
+      condition: event.body.event == "incident.created"
+      action:
+        run_job_template:
+          name: Publish ITSM Chat Notification
+          organization: AIOps
+          job_args:
+            extra_vars:
+              itsm_chat_event: incident.created
+              itsm_chat_public_id: "{{ event.body.incident.public_id | default('?') }}"
+              itsm_chat_title: "{{ event.body.incident.title | default('Untitled') }}"
+              itsm_chat_severity: "{{ event.body.incident.severity | default('medium') }}"
+
+    - name: Post request.submitted to chat
+      condition: event.body.event == "request.submitted"
+      action:
+        run_job_template:
+          name: Publish ITSM Chat Notification
+          organization: AIOps
+          job_args:
+            extra_vars:
+              itsm_chat_event: request.submitted
+              itsm_chat_public_id: "{{ event.body.request.public_id | default('?') }}"
+              itsm_chat_title: >-
+                {{ event.body.request.name | default(event.body.request.title | default('Service request')) }}

@@ -1,0 +1,8 @@
+---
+- name: Configure AAP Apache alert remediation job templates
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../group_vars/all/aap_apache_troubleshoot_pipeline.yml
+  roles:
+    - role: aap-apache-troubleshoot-pipeline

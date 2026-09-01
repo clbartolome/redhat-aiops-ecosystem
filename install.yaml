@@ -12,9 +12,25 @@
       ansible.builtin.include_tasks:
         file: components/openshift-mcp/install.yaml
 
+    - name: Install AAP MCP
+      ansible.builtin.include_tasks:
+        file: components/aap-mcp/install.yaml
+
+    - name: Install AAP EDA
+      ansible.builtin.include_tasks:
+        file: components/aap-eda/install.yaml
+
     - name: Install ITSM
       ansible.builtin.include_tasks:
         file: components/itsm/install.yaml
+
+    - name: Install Gitea
+      ansible.builtin.include_tasks:
+        file: components/gitea/install.yaml
+
+    - name: Install observability
+      ansible.builtin.include_tasks:
+        file: components/observability/install.yaml
 
     - name: Install agent
       ansible.builtin.include_tasks:
@@ -30,3 +46,5 @@
 
   vars_files:
     - vars.yaml
+
+- import_playbook: components/aap-casc/deploy/playbooks/casc/install.yml

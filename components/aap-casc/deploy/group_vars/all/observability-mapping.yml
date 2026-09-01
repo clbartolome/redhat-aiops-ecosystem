@@ -1,0 +1,9 @@
+---
+# Kafka bootstrap and topics for EDA pipelines (maps to observability component).
+observability_kit_namespace: "{{ observability.namespace }}"
+observability_kit_kafka_cluster_name: "{{ observability.kafka_cluster_name }}"
+observability_kit_kafka_topic_alertmanager: aiops.alertmanager
+observability_kit_kafka_topic_itsm: aiops.itsm
+observability_kit_kafka_topic_aap_logs: aiops.aap.logs
+observability_kit_kafka_internal_bootstrap: >-
+  {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092

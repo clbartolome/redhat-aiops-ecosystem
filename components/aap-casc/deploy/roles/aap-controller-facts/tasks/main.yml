@@ -1,0 +1,75 @@
+---
+- name: Discover Ansible Automation Platform instance
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_controller_facts_instance_name }}"
+    namespace: "{{ aap_controller_facts_namespace }}"
+  register: aap_controller_facts_aap_cr
+
+- name: Fail when Ansible Automation Platform instance is missing
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_controller_facts_instance_name }} not found in namespace
+      {{ aap_controller_facts_namespace }}. Deploy AAP before syncing playbooks.
+  when: aap_controller_facts_aap_cr.resources | default([]) | length == 0
+
+- name: Set AAP gateway connection facts from operator status
+  ansible.builtin.set_fact:
+    aap_controller_facts_gateway_url: "{{ aap_controller_facts_aap_cr.resources[0].status.URL }}"
+    aap_controller_facts_admin_user: "{{ aap_controller_facts_aap_cr.resources[0].status.adminUser }}"
+    aap_controller_facts_admin_password_secret: >-
+      {{ aap_controller_facts_aap_cr.resources[0].status.adminPasswordSecret }}
+  no_log: true
+
+- name: Get AAP admin password from cluster secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_controller_facts_admin_password_secret }}"
+    namespace: "{{ aap_controller_facts_namespace }}"
+  register: aap_controller_facts_admin_secret
+  no_log: true
+
+- name: Fail when AAP admin password secret is missing
+  ansible.builtin.fail:
+    msg: >-
+      Secret {{ aap_controller_facts_admin_password_secret }} not found in namespace
+      {{ aap_controller_facts_namespace }}.
+  when: aap_controller_facts_admin_secret.resources | default([]) | length == 0
+
+- name: Set AAP admin password fact
+  ansible.builtin.set_fact:
+    aap_controller_facts_admin_password: >-
+      {{ aap_controller_facts_admin_secret.resources[0].data.password | b64decode }}
+  no_log: true
+
+- name: Publish AAP controller facts for downstream roles
+  ansible.builtin.set_fact:
+    aap_platform: >-
+      {{
+        aap_platform | default({})
+        | combine(
+            {
+              'aap': {
+                'instance_name': aap_controller_facts_instance_name,
+                'namespace': aap_controller_facts_namespace,
+                'gateway_url': aap_controller_facts_gateway_url,
+                'controller_url': aap_controller_facts_gateway_url,
+                'username': aap_controller_facts_admin_user,
+                'password': aap_controller_facts_admin_password,
+                'organization': aap_controller_facts_organization
+              }
+            },
+            recursive=true
+          )
+      }}
+    cacheable: true
+  no_log: true
+
+- name: Display AAP controller facts summary
+  ansible.builtin.debug:
+    msg:
+      - "AAP namespace: {{ aap_controller_facts_namespace }}"
+      - "AAP Gateway: {{ aap_controller_facts_gateway_url }}"
+      - "AAP organization: {{ aap_controller_facts_organization }}"

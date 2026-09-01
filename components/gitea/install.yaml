@@ -1,0 +1,148 @@
+---
+- name: Create gitea project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ gitea.namespace }}"
+
+- name: Build postgres-secret from templated env
+  ansible.builtin.set_fact:
+    gitea_postgres_config: "{{ gitea_postgres_config | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/gitea/postgres.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create postgres-secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: postgres-secret
+        namespace: "{{ gitea.namespace }}"
+      type: Opaque
+      stringData: "{{ gitea_postgres_config }}"
+
+- name: Build gitea-secret from templated env
+  ansible.builtin.set_fact:
+    gitea_app_config: "{{ gitea_app_config | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/gitea/gitea.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create gitea-secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: gitea-secret
+        namespace: "{{ gitea.namespace }}"
+      type: Opaque
+      stringData: "{{ gitea_app_config }}"
+
+- name: Build gitea-host-config from templated env
+  ansible.builtin.set_fact:
+    gitea_host_config: "{{ gitea_host_config | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/gitea/host.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create gitea-host-config ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: gitea-host-config
+        namespace: "{{ gitea.namespace }}"
+      data: "{{ gitea_host_config }}"
+
+- name: Apply gitea manifests
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ gitea.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+  loop: "{{ query('fileglob', playbook_dir ~ '/components/gitea/crds/*.yaml') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Wait for postgres Deployment
+  kubernetes.core.k8s:
+    state: present
+    api_version: apps/v1
+    kind: Deployment
+    name: postgres
+    namespace: "{{ gitea.namespace }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+
+- name: Wait for gitea Deployment
+  kubernetes.core.k8s:
+    state: present
+    api_version: apps/v1
+    kind: Deployment
+    name: gitea
+    namespace: "{{ gitea.namespace }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 600
+
+- name: Get gitea pod
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ gitea.namespace }}"
+    label_selectors:
+      - app=gitea
+  register: gitea_pods
+
+- name: Fail when gitea pod is missing
+  ansible.builtin.fail:
+    msg: No gitea pod found in namespace {{ gitea.namespace }}.
+  when: gitea_pods.resources | length == 0
+
+- name: List gitea admin users
+  kubernetes.core.k8s_exec:
+    namespace: "{{ gitea.namespace }}"
+    pod: "{{ gitea_pods.resources[0].metadata.name }}"
+    container: gitea
+    command: gitea --config /data/gitea/conf/app.ini admin user list
+  register: gitea_admin_list
+  changed_when: false
+
+- name: Create gitea admin user
+  kubernetes.core.k8s_exec:
+    namespace: "{{ gitea.namespace }}"
+    pod: "{{ gitea_pods.resources[0].metadata.name }}"
+    container: gitea
+    command: >-
+      gitea --config /data/gitea/conf/app.ini admin user create --admin
+      --username {{ gitea.admin_user | quote }}
+      --password {{ gitea.admin_password | quote }}
+      --email {{ gitea.admin_email | quote }}
+      --must-change-password=false
+  when: gitea.admin_user not in gitea_admin_list.stdout
+
+- name: Update gitea admin password
+  kubernetes.core.k8s_exec:
+    namespace: "{{ gitea.namespace }}"
+    pod: "{{ gitea_pods.resources[0].metadata.name }}"
+    container: gitea
+    command: >-
+      gitea --config /data/gitea/conf/app.ini admin user change-password
+      --username {{ gitea.admin_user | quote }}
+      --password {{ gitea.admin_password | quote }}
+      --must-change-password=false
+  when: gitea.admin_user in gitea_admin_list.stdout
+
+- name: Show Gitea connection details
+  ansible.builtin.debug:
+    msg:
+      - "Gitea URL: {{ gitea.root_url }}"
+      - "Gitea admin user: {{ gitea.admin_user }}"

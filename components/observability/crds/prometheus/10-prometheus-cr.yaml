@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: "{{ observability.namespace }}"
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  replicas: 1
+  serviceAccountName: prometheus
+  additionalScrapeConfigs:
+    name: prometheus-additional-scrape-config
+    key: prometheus-additional.yaml
+  serviceMonitorSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+  serviceMonitorNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: "{{ observability.namespace }}"
+  podMonitorSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+  podMonitorNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: "{{ observability.namespace }}"
+  probeSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+  probeNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: "{{ observability.namespace }}"
+  ruleSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+  ruleNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: "{{ observability.namespace }}"
+  alerting:
+    alertmanagers:
+      - apiVersion: v2
+        name: alertmanager-operated
+        namespace: "{{ observability.namespace }}"
+        port: web
+  resources:
+    requests:
+      cpu: 200m
+      memory: 400Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  retention: 24h
+  enableAdminAPI: false
+  evaluationInterval: 30s
+  scrapeInterval: 30s

@@ -1,0 +1,12 @@
+spec:
+  mcp:
+    disabled: false
+    allow_write_operations: {{ aap_mcp.allow_write_operations | bool }}
+{% if aap_mcp.bundle_cacert_secret | default('') | length > 0 %}
+    bundle_cacert_secret: {{ aap_mcp.bundle_cacert_secret }}
+{% endif %}
+{% if aap_mcp.ignore_certificate_errors | default(false) | bool %}
+    extra_settings:
+      - setting: IGNORE_CERTIFICATE_ERRORS
+        value: true
+{% endif %}

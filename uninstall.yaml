@@ -9,9 +9,17 @@
       ansible.builtin.include_role:
         name: demos.utils.kubeconfig
 
+    - name: Uninstall AAP CASC
+      ansible.builtin.include_tasks:
+        file: components/aap-casc/uninstall.yaml
+
     - name: Uninstall monitor
       ansible.builtin.include_tasks:
         file: components/monitor/uninstall.yaml
+
+    - name: Uninstall observability
+      ansible.builtin.include_tasks:
+        file: components/observability/uninstall.yaml
 
     - name: Uninstall chat
       ansible.builtin.include_tasks:
@@ -21,9 +29,21 @@
       ansible.builtin.include_tasks:
         file: components/agent/uninstall.yaml
 
+    - name: Uninstall Gitea
+      ansible.builtin.include_tasks:
+        file: components/gitea/uninstall.yaml
+
     - name: Uninstall ITSM
       ansible.builtin.include_tasks:
         file: components/itsm/uninstall.yaml
+
+    - name: Uninstall AAP EDA
+      ansible.builtin.include_tasks:
+        file: components/aap-eda/uninstall.yaml
+
+    - name: Uninstall AAP MCP
+      ansible.builtin.include_tasks:
+        file: components/aap-mcp/uninstall.yaml
 
     - name: Uninstall OpenShift MCP
       ansible.builtin.include_tasks:

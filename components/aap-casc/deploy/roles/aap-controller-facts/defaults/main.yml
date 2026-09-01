@@ -1,0 +1,6 @@
+---
+aap_controller_facts_config: "{{ aap_casc | default({}) }}"
+aap_controller_facts_namespace: "{{ aap_controller_facts_config.namespace | default(aap_casc_namespace | default('aap')) }}"
+aap_controller_facts_instance_name: "{{ aap_controller_facts_config.instance_name | default(aap_casc_instance_name | default('ansible')) }}"
+aap_controller_facts_organization: "{{ aap_controller_facts_config.organization | default(aap_casc_organization | default('AIOps')) }}"
+aap_controller_facts_validate_certs: "{{ aap_controller_facts_config.validate_certs | default(aap_casc_validate_certs | default(false)) | bool }}"

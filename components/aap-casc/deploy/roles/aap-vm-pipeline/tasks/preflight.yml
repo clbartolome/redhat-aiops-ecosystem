@@ -1,0 +1,36 @@
+---
+- name: Fail when platform facts are not loaded
+  ansible.builtin.fail:
+    msg: Run aap-platform-facts before this pipeline.
+  when: aap_platform is not defined
+
+- name: Set AAP controller connection facts from platform facts
+  ansible.builtin.set_fact:
+    aap_vm_pipeline_controller_host: "{{ aap_platform.aap.gateway_url }}"
+    aap_vm_pipeline_controller_username: "{{ aap_platform.aap.username }}"
+    aap_vm_pipeline_controller_password: "{{ aap_platform.aap.password }}"
+    aap_vm_pipeline_gitea_scm_url: >-
+      {{
+        ('http://' ~ aap_vm_pipeline_gitea_scm_internal_host ~ '/'
+         ~ aap_platform.gitea.username ~ '/' ~ aap_vm_pipeline_gitea_repo ~ '.git')
+        if (aap_vm_pipeline_gitea_scm_use_internal | default(true) | bool)
+        else (
+          aap_platform.gitea.url
+          | replace('.apps.apps.', '.apps.')
+          | regex_replace('/$', '')
+          ~ '/' ~ aap_platform.gitea.username ~ '/' ~ aap_vm_pipeline_gitea_repo ~ '.git'
+        )
+      }}
+  no_log: true
+
+- name: Verify AAP Controller API responds
+  ansible.builtin.uri:
+    url: "{{ aap_vm_pipeline_controller_host }}/api/controller/v2/ping/"
+    method: GET
+    user: "{{ aap_vm_pipeline_controller_username }}"
+    password: "{{ aap_vm_pipeline_controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_vm_pipeline_validate_certs }}"
+    status_code: 200
+  no_log: true
+

@@ -1,0 +1,34 @@
+---
+- name: Start ITSM change task tracking
+  ansible.builtin.import_role:
+    name: itsm_change_task
+    tasks_from: start.yml
+
+- name: Run VM manifest preflight checks
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Allocate fixed IP address for VM from pool
+  ansible.builtin.include_tasks: allocate_vm_ip.yml
+
+- name: Generate VM password and render manifest
+  ansible.builtin.include_tasks: render.yml
+
+- name: Grant Argo CD permission to manage VM namespace before pushing manifest
+  ansible.builtin.include_tasks: ensure_gitops_namespace_rbac.yml
+
+- name: Push rendered manifest to Gitea Infrastructure repository
+  ansible.builtin.include_tasks: push.yml
+
+- name: Display VM manifest summary
+  ansible.builtin.debug:
+    msg:
+      - "VM name: {{ vm_name }}"
+      - "Fixed IP: {{ vm_ip }}"
+      - "Manifest path: {{ vm_manifest_gitea_repo }}/{{ vm_manifest_gitea_path }}/{{ vm_name }}.yaml"
+      - "Target namespace: {{ vm_namespace }}"
+      - "Gitea repo URL: {{ vm_manifest_gitea_repo_url }}"
+
+- name: Complete ITSM change task tracking
+  ansible.builtin.import_role:
+    name: itsm_change_task
+    tasks_from: complete.yml

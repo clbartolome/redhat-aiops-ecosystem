@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  selector:
+    app.kubernetes.io/name: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http

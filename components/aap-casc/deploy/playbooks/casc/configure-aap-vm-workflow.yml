@@ -1,0 +1,9 @@
+---
+- name: Configure AAP VM provisioning workflow
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../group_vars/all/aap_vm_pipeline.yml
+    - ../../group_vars/all/itsm_apache_stack.yml
+  roles:
+    - role: aap-vm-pipeline

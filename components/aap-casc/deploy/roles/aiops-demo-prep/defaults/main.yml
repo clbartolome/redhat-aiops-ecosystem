@@ -1,0 +1,17 @@
+---
+validate_certs: false
+
+openshift_virt_operator_namespace: openshift-cnv
+openshift_virt_hyperconverged_name: kubevirt-hyperconverged
+
+aiops_demo_namespace: aiops-demo
+aiops_demo_vms_rsa_secret_name: authorized-keys
+aiops_demo_vms_secret_data_key: key
+aiops_demo_vms_legacy_secret_name: vms-rsa
+aiops_demo_vms_rsa_key_size: 4096
+aiops_demo_vms_rsa_temp_dir: /tmp/aiops-demo-vms-rsa
+aiops_demo_vms_ssh_username: fedora
+aiops_demo_vm_udn_name: aiops-vm-network
+aiops_demo_vm_udn_ready_retries: 30
+aiops_demo_vm_udn_ready_delay: 10
+aiops_demo_monitoring_template_dir: "{{ playbook_dir }}/playbooks/templates"

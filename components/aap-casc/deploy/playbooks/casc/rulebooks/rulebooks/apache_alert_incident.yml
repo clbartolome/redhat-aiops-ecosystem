@@ -1,0 +1,25 @@
+---
+- name: Apache HTTP probe alerts via Kafka
+  hosts: all
+  sources:
+    - name: listen for alerts
+      ansible.eda.kafka:
+        host: observability-kafka-kafka-bootstrap.observability.svc
+        port: 9092
+        topic: aiops.alertmanager
+        group_id: eda-apache-alert-incident
+  rules:
+    - name: Open ITSM incident on Apache down
+      condition: >
+        event.body.status == "firing"
+        and event.body.commonLabels.alertname == "ApacheApplicationDown"
+      action:
+        run_job_template:
+          name: Create Apache Alert Incident
+          organization: AIOps
+          job_args:
+            extra_vars:
+              vm_name: "{{ event.body.commonLabels.vm_name | default('') }}"
+              alertname: "{{ event.body.commonLabels.alertname | default('') }}"
+              probe_instance: "{{ event.body.commonLabels.instance | default('') }}"
+              alert_summary: "{{ event.body.commonAnnotations.summary | default('') }}"

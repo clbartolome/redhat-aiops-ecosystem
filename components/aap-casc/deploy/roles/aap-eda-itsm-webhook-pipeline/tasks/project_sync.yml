@@ -1,0 +1,9 @@
+---
+- name: Sync AIOps Rulebooks EDA project for ITSM notification rulebook
+  ansible.builtin.include_tasks: ../aap-eda-pipeline/tasks/sync_project.yml
+  vars:
+    eda_project_sync_name: "{{ aap_eda_itsm_webhook_pipeline_project }}"
+    eda_project_sync_organization: "{{ aap_eda_itsm_webhook_pipeline_organization }}"
+    eda_project_sync_controller_host: "{{ aap_eda_itsm_webhook_pipeline_controller_host }}"
+    eda_project_sync_controller_token: "{{ aap_eda_itsm_webhook_pipeline_controller_oauthtoken }}"
+    eda_project_sync_validate_certs: "{{ aap_eda_itsm_webhook_pipeline_validate_certs }}"

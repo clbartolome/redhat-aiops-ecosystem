@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: "{{ observability.namespace }}-demo-alerts"
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  groups:
+    - name: "{{ observability.namespace }}.demo"
+      interval: 30s
+      rules:
+        - alert: ObservabilityTargetDown
+          expr: up{namespace="{{ observability.namespace }}"} == 0
+          for: 2m
+          labels:
+            severity: warning
+            part_of: "{{ observability.part_of_label }}"
+          annotations:
+            summary: Scrape target down in {{ observability.namespace }}
+            description: Prometheus cannot scrape {% raw %}{{ $labels.job }}{% endraw %} (instance {% raw %}{{ $labels.instance }}{% endraw %}).

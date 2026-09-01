@@ -43,3 +43,7 @@
     namespace: "{{ itsm.namespace }}"
     wait: true
     wait_timeout: 180
+
+- name: Configure ITSM outbound webhook for observability pipeline
+  ansible.builtin.include_tasks:
+    file: "{{ playbook_dir }}/components/itsm/tasks/configure_observability_webhook.yml"

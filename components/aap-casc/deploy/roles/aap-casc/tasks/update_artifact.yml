@@ -1,0 +1,15 @@
+---
+- name: Merge permanent OpenShift token into platform facts
+  ansible.builtin.set_fact:
+    aap_platform: >-
+      {{
+        aap_platform | combine({
+          'openshift': aap_platform.openshift | combine({
+            'token': aap_casc_openshift_bearer_token,
+            'service_account': aap_casc_openshift_sa_name,
+            'token_secret': aap_casc_openshift_token_secret,
+            'token_namespace': aap_casc_openshift_namespace
+          })
+        }, recursive=True)
+      }}
+  no_log: true

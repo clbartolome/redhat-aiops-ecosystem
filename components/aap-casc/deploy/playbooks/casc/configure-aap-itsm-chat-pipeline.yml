@@ -1,0 +1,8 @@
+---
+- name: Configure AAP job template for ITSM chat notifications
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../group_vars/all/aap_itsm_chat_pipeline.yml
+  roles:
+    - role: aap-itsm-chat-pipeline

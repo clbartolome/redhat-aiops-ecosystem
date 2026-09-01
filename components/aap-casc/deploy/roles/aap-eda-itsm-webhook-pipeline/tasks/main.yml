@@ -1,0 +1,28 @@
+---
+- name: Run EDA ITSM webhook pipeline preflight checks
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Obtain AAP gateway OAuth token for API calls
+  ansible.builtin.include_role:
+    name: aap-controller
+  vars:
+    aap_controller_token_fact_name: aap_eda_itsm_webhook_pipeline_controller_oauthtoken
+
+- name: Configure Event-Driven Ansible for ITSM outbound webhooks via Kafka
+  block:
+    - name: Sync AIOps Rulebooks project for ITSM notification rulebook
+      ansible.builtin.include_tasks: project_sync.yml
+
+    - name: Ensure ITSM App Chat rulebook activation is enabled
+      ansible.builtin.include_tasks: activation.yml
+
+    - name: Publish ITSM Kafka EDA facts to demo platform artifact
+      ansible.builtin.include_tasks: update_artifact.yml
+
+- name: Display EDA ITSM Kafka pipeline summary
+  ansible.builtin.debug:
+    msg:
+      - "EDA URL: {{ aap_eda_itsm_webhook_pipeline_eda_url }}"
+      - "Project: {{ aap_eda_itsm_webhook_pipeline_project }}"
+      - "Kafka topic: {{ aap_eda_itsm_webhook_pipeline_kafka_topic_itsm }}"
+      - "Activation: {{ aap_eda_itsm_webhook_pipeline_activation_name }}"

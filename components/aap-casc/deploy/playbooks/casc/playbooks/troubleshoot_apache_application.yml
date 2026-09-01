@@ -1,0 +1,344 @@
+---
+- name: Troubleshoot Apache application (preflight)
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - defaults/main.yml
+  tasks:
+    - name: Load ITSM API credentials
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: load_itsm_credential.yml
+
+    - name: Load chat-app credentials
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: load_chat_credential.yml
+
+    - name: Validate required ITSM incident reference
+      ansible.builtin.assert:
+        that:
+          - itsm_incident_ref is defined
+          - itsm_incident_ref | string | trim | length > 0
+        fail_msg: >-
+          itsm_incident_ref is required. Launch via AAP MCP after user confirms
+          remediation in chat.
+
+    - name: Resolve vm_name from ITSM incident when not provided
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: resolve_vm_name_from_incident.yml
+
+    - name: Load Generic Application asset fields from ITSM
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: resolve_apache_app_asset_from_itsm.yml
+
+    - name: Initialize troubleshooting summary facts
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines:
+          - >-
+            Troubleshooting Apache on {{ vm_name | string | trim }}
+            (incident {{ itsm_incident_ref | string | trim }}) using ITSM asset
+            {{ apache_troubleshoot_app_asset.name | default('unknown') }}.
+
+    - name: Ensure GitOps VM and Apache exposure exist before SSH remediation
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: ensure_apache_gitops_stack.yml
+
+    - name: Refresh VM SSH target, ITSM asset connectivity, and AAP inventory
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: refresh_vm_ssh_target.yml
+
+    - name: Resolve chat webhook URL for remediation summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_chat_base_url: >-
+          {{
+            chat_app_url | default(aap_platform.chat_app.url | default('', true), true)
+            | regex_replace('/$', '')
+          }}
+
+    - name: Build absolute chat webhook URL for remediation summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_chat_webhook_url: >-
+          {{
+            chat_webhook_url | trim
+            if (
+              chat_webhook_url | default('', true) | trim
+              | regex_search('^https?://')
+            )
+            else (
+              apache_troubleshoot_chat_base_url
+              ~ '/api/v1/webhooks/channels/'
+              ~ (chat_aiops_channel_name | default('operations'))
+              ~ '/messages'
+              if apache_troubleshoot_chat_base_url | string | trim | length > 0
+              else ''
+            )
+          }}
+
+    - name: Resolve target host for Apache troubleshooting
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: resolve_apache_app_target_host.yml
+
+- name: Verify and remediate Apache application stack on target VM
+  hosts: apache_app_targets
+  gather_facts: true
+  become: true
+  vars_files:
+    - defaults/main.yml
+  tasks:
+    - name: Verify SSH connectivity to target VM
+      ansible.builtin.ping:
+      register: apache_troubleshoot_ssh_ping
+      until: apache_troubleshoot_ssh_ping is succeeded
+      retries: 18
+      delay: 10
+
+    - name: Load effective Apache application configuration from ITSM asset
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: load_troubleshoot_effective_config
+
+    - name: Verify RPM packages from ITSM asset are installed
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: verify_packages
+
+    - name: Record RPM verification in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + [
+              'All required RPM packages installed (' ~ (apache_app_rpm_package_list | join(', ')) ~ ').'
+              if (apache_app_packages_missing | default([]) | length) == 0
+              else 'Missing RPM packages: ' ~ (apache_app_packages_missing | join(', ')) ~ '.'
+            ]
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+
+    - name: Install missing RPM packages from ITSM asset
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: install
+      when: apache_app_packages_missing | default([]) | length > 0
+
+    - name: Record RPM installation remediation in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + ['Installed missing RPM packages: ' ~ (apache_app_packages_missing | join(', ')) ~ '.']
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+      when: apache_app_packages_missing | default([]) | length > 0
+
+    - name: Verify application repository is deployed at docroot
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: verify_deploy
+
+    - name: Record deploy verification in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + [
+              'Application repository present at ' ~ apache_troubleshoot_runtime_apache_app_docroot ~ '.'
+              if not (apache_app_deploy_missing | default(true) | bool)
+              else 'Application repository missing or invalid at ' ~ apache_troubleshoot_runtime_apache_app_docroot ~ '.'
+            ]
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+
+    - name: Deploy application repository when docroot is missing
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: deploy
+      when: apache_app_deploy_missing | default(true) | bool
+
+    - name: Record deploy remediation in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + ['Redeployed application repository ' ~ apache_troubleshoot_runtime_app_repo ~ ' to ' ~ apache_troubleshoot_runtime_apache_app_docroot ~ '.']
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+      when: apache_app_deploy_missing | default(true) | bool
+
+    - name: Verify enabled services from ITSM asset are running
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: verify_services
+
+    - name: Record service verification in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + [
+              'All enabled services active (' ~ (apache_app_enabled_service_list | join(', ')) ~ ').'
+              if (apache_app_services_down | default([]) | length) == 0
+              else 'Services down or missing packages: ' ~ (apache_app_services_down | join(', ')) ~ '.'
+            ]
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+
+    - name: Start enabled services when down
+      ansible.builtin.include_role:
+        name: apache_app
+        tasks_from: start
+      when: apache_app_services_down | default([]) | length > 0
+
+    - name: Record service start remediation in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + ['Started services: ' ~ (apache_app_services_down | join(', ')) ~ '.']
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+      when: apache_app_services_down | default([]) | length > 0
+
+    - name: Verify Apache responds on localhost service port
+      ansible.builtin.uri:
+        url: >-
+          http://127.0.0.1:{{
+            apache_troubleshoot_runtime_apache_exposure_service_port | default('80') | string | trim
+          }}/
+        status_code: [200, 403, 301, 302]
+      register: apache_troubleshoot_local_http
+      until: apache_troubleshoot_local_http.status in [200, 403, 301, 302]
+      retries: 12
+      delay: 5
+
+    - name: Record local HTTP verification in summary
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary_lines: >-
+          {{
+            hostvars['localhost'].apache_troubleshoot_summary_lines
+            + [
+              'Local HTTP check on port '
+              ~ (apache_troubleshoot_runtime_apache_exposure_service_port | default('80') | string | trim)
+              ~ ' returned status '
+              ~ (apache_troubleshoot_local_http.status | string)
+              ~ '.'
+            ]
+          }}
+      delegate_to: localhost
+      delegate_facts: true
+
+- name: Complete ITSM incident and notify chat
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - defaults/main.yml
+  tasks:
+    - name: Build final remediation summary text
+      ansible.builtin.set_fact:
+        apache_troubleshoot_summary: "{{ apache_troubleshoot_summary_lines | join(' ') }}"
+
+    - name: POST remediation comment on ITSM incident
+      ansible.builtin.uri:
+        url: >-
+          {{ itsm_api_base_url | regex_replace('/$', '') }}/api/v1/incidents/{{
+          itsm_incident_ref | string | trim | urlencode }}/comments
+        method: POST
+        force_basic_auth: true
+        url_username: "{{ itsm_api_user }}"
+        url_password: "{{ itsm_api_password }}"
+        validate_certs: "{{ itsm_validate_certs | default(false) }}"
+        body_format: json
+        body:
+          body: "{{ apache_troubleshoot_summary }}"
+        status_code: [200]
+        headers:
+          Accept: application/json
+          Content-Type: application/json
+
+    - name: Close ITSM incident after successful remediation
+      ansible.builtin.uri:
+        url: >-
+          {{ itsm_api_base_url | regex_replace('/$', '') }}/api/v1/incidents/{{
+          itsm_incident_ref | string | trim | urlencode }}/close
+        method: POST
+        force_basic_auth: true
+        url_username: "{{ itsm_api_user }}"
+        url_password: "{{ itsm_api_password }}"
+        validate_certs: "{{ itsm_validate_certs | default(false) }}"
+        body_format: json
+        body: {}
+        status_code: [200]
+        headers:
+          Accept: application/json
+          Content-Type: application/json
+
+    - name: Resolve incident notification message for threaded chat reply
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: resolve_chat_incident_parent_message.yml
+      when:
+        - apache_troubleshoot_post_chat_summary | default(true) | bool
+        - apache_troubleshoot_chat_webhook_url | default('') | string | trim | length > 0
+        - apache_troubleshoot_chat_webhook_url | regex_search('^https?://')
+        - apache_troubleshoot_chat_base_url | default('') | string | trim | length > 0
+        - chat_app_username | default('') | string | trim | length > 0
+        - chat_app_password | default('') | string | trim | length > 0
+
+    - name: Post remediation summary as thread reply under incident message
+      ansible.builtin.uri:
+        url: "{{ apache_troubleshoot_chat_webhook_url }}"
+        method: POST
+        body_format: json
+        body:
+          body: >-
+            [remediation.complete] {{ itsm_incident_ref | string | trim }} on
+            {{ vm_name | string | trim }} — {{ apache_troubleshoot_summary }}
+          parent_id: "{{ apache_troubleshoot_chat_parent_message_id }}"
+        validate_certs: false
+        status_code: [201]
+      when:
+        - apache_troubleshoot_post_chat_summary | default(true) | bool
+        - apache_troubleshoot_chat_parent_message_id | default('') | string | trim | length > 0
+
+    - name: Skip chat notification when incident parent message was not found
+      ansible.builtin.debug:
+        msg: >-
+          No [incident.created] chat message found for {{ itsm_incident_ref | string | trim }};
+          skipping remediation summary post to avoid a top-level channel message.
+          Set apache_troubleshoot_post_chat_summary: false to silence this notice.
+      when:
+        - apache_troubleshoot_post_chat_summary | default(true) | bool
+        - apache_troubleshoot_chat_webhook_url | default('') | string | trim | length > 0
+        - apache_troubleshoot_chat_parent_message_id | default('') | string | trim | length == 0
+
+    - name: Skip chat notification when remediation chat posts are disabled
+      ansible.builtin.debug:
+        msg: Remediation chat summary posting is disabled (apache_troubleshoot_post_chat_summary=false).
+      when: not (apache_troubleshoot_post_chat_summary | default(true) | bool)
+
+    - name: Skip chat notification when webhook URL is unavailable
+      ansible.builtin.debug:
+        msg: >-
+          Chat webhook URL is missing or relative; skipping operations channel post.
+          Attach the Chat App credential or set chat_webhook_url to a full https URL.
+      when:
+        - apache_troubleshoot_post_chat_summary | default(true) | bool
+        - >-
+          apache_troubleshoot_chat_webhook_url | default('') | string | trim | length == 0
+          or not (apache_troubleshoot_chat_webhook_url | default('') | regex_search('^https?://'))
+
+    - name: Display troubleshooting result
+      ansible.builtin.debug:
+        msg: "{{ apache_troubleshoot_summary }}"

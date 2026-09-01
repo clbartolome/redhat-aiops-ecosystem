@@ -1,0 +1,142 @@
+---
+- name: Disable EDA on Ansible Automation Platform instance
+  kubernetes.core.k8s:
+    state: present
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_eda.instance_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+    merge_type: merge
+    definition:
+      spec:
+        eda:
+          disabled: true
+
+- name: Set AAP EDA deployment names
+  ansible.builtin.set_fact:
+    aap_eda_deployment_names:
+      - "{{ aap_eda.instance_name }}-eda-api"
+      - "{{ aap_eda.instance_name }}-eda-activation-worker"
+      - "{{ aap_eda.instance_name }}-eda-default-worker"
+      - "{{ aap_eda.instance_name }}-eda-event-stream"
+    aap_eda_cr_name: "{{ aap_eda.instance_name }}-eda"
+    aap_eda_operator_managed_secrets:
+      - "{{ aap_eda.instance_name }}-eda-db-fields-encryption-secret"
+      - "{{ aap_eda.instance_name }}-eda-admin-password"
+
+- name: Wait for EDA custom resource removal
+  kubernetes.core.k8s_info:
+    api_version: eda.ansible.com/v1alpha1
+    kind: EDA
+    name: "{{ aap_eda_cr_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_cr
+  until: aap_eda_cr.resources | length == 0
+  retries: 30
+  delay: 10
+  ignore_errors: true
+
+- name: Wait for AAP EDA Deployment removal
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_deployment
+  until: aap_eda_deployment.resources | length == 0
+  retries: 30
+  delay: 10
+  ignore_errors: true
+  loop: "{{ aap_eda_deployment_names | unique }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Check whether any EDA Deployments remain before database reset
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ aap_eda.namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=ansible-eda
+  register: aap_eda_remaining_deployments
+
+- name: Set EDA deployments still present flag
+  ansible.builtin.set_fact:
+    aap_eda_deployments_still_present: >-
+      {{
+        aap_eda_remaining_deployments.resources | default([])
+        | selectattr('metadata.name', 'in', aap_eda_deployment_names)
+        | list
+        | length > 0
+      }}
+
+- name: Locate AAP shared Postgres pod for EDA database reset
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ aap_eda.namespace }}"
+    label_selectors:
+      - "{{ aap_eda.postgres_pod_label_selector }}"
+  register: aap_eda_postgres_pods
+
+- name: Read AAP Postgres admin password secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_eda.postgres_admin_secret }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_postgres_admin_secret
+  when: aap_eda_postgres_pods.resources | default([]) | length > 0
+
+- name: Reset EDA database so reinstall does not reuse stale encrypted data
+  when:
+    - not aap_eda_deployments_still_present | bool
+    - aap_eda_postgres_pods.resources | default([]) | length > 0
+    - aap_eda_postgres_admin_secret.resources | default([]) | length > 0
+  block:
+    - name: Terminate active sessions on EDA database
+      kubernetes.core.k8s_exec:
+        namespace: "{{ aap_eda.namespace }}"
+        pod: "{{ aap_eda_postgres_pods.resources[0].metadata.name }}"
+        container: postgres
+        command: >-
+          bash -lc
+          "PGPASSWORD='{{ aap_eda_postgres_admin_secret.resources[0].data[aap_eda.postgres_admin_password_key] | b64decode }}'
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+          WHERE datname = '{{ aap_eda.database_name }}' AND pid <> pg_backend_pid();\""
+      register: aap_eda_db_terminate_sessions
+      changed_when: false
+      failed_when: false
+
+    - name: Drop and recreate EDA database
+      kubernetes.core.k8s_exec:
+        namespace: "{{ aap_eda.namespace }}"
+        pod: "{{ aap_eda_postgres_pods.resources[0].metadata.name }}"
+        container: postgres
+        command: >-
+          bash -lc
+          "PGPASSWORD='{{ aap_eda_postgres_admin_secret.resources[0].data[aap_eda.postgres_admin_password_key] | b64decode }}'
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -c \"DROP DATABASE IF EXISTS {{ aap_eda.database_name }};\"
+          -c \"CREATE DATABASE {{ aap_eda.database_name }} OWNER {{ aap_eda.database_owner }};\""
+      register: aap_eda_db_reset
+
+- name: Skip EDA database reset while EDA Deployments are still running
+  ansible.builtin.debug:
+    msg: >-
+      Skipping EDA database reset because EDA Deployments are still present in
+      {{ aap_eda.namespace }}. Wait for operator teardown or delete Deployments
+      before resetting database {{ aap_eda.database_name }}.
+  when: aap_eda_deployments_still_present | default(false) | bool
+
+- name: Remove EDA operator-managed secrets recreated on enable
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: "{{ item }}"
+    namespace: "{{ aap_eda.namespace }}"
+  loop: "{{ aap_eda_operator_managed_secrets }}"
+  loop_control:
+    label: "{{ item }}"

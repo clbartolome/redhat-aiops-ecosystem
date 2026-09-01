@@ -1,0 +1,97 @@
+---
+- name: Configure AAP CASC for AIOps demo
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../../../../vars.yaml
+    - ../../group_vars/all/observability-mapping.yml
+
+  tasks:
+    - name: Load AAP CASC group variables
+      ansible.builtin.include_vars:
+        dir: "{{ playbook_dir }}/../../group_vars/all"
+        extensions:
+          - yml
+
+    - name: Map aap_casc install toggles for playbook conditionals
+      ansible.builtin.set_fact:
+        aap_casc_enable_observability_pipelines: "{{ aap_casc.enable_observability_pipelines | default(true) | bool }}"
+        aap_casc_itsm_chat_webhook_delivery: "{{ aap_casc.itsm_chat_webhook_delivery | default('eda') }}"
+
+    - name: Discover platform connection facts
+      ansible.builtin.include_role:
+        name: aap-platform-facts
+
+    - name: Prepare aiops-demo VM namespace and SSH keys
+      ansible.builtin.include_role:
+        name: aiops-demo-prep
+
+    - name: Sync Gitea repositories for AAP SCM
+      ansible.builtin.include_role:
+        name: gitea-repos
+      vars:
+        gitea_repos_local_base: "{{ playbook_dir }}"
+
+    - name: Configure AAP organization and credentials
+      ansible.builtin.include_role:
+        name: aap-casc
+
+    - name: Configure Argo CD for Infrastructure VMs repository
+      ansible.builtin.include_role:
+        name: gitops_infrastructure
+      vars:
+        gitops_infrastructure_dest_namespace: "{{ aap_platform.virtualization.vm_namespace }}"
+
+    - name: Configure AAP VM provisioning workflow
+      ansible.builtin.include_role:
+        name: aap-vm-pipeline
+
+    - name: Configure AAP Apache httpd deployment workflow
+      ansible.builtin.include_role:
+        name: aap-httpd-pipeline
+
+    - name: Configure AAP Apache alert remediation job templates
+      ansible.builtin.include_role:
+        name: aap-apache-troubleshoot-pipeline
+      when: aap_casc_enable_observability_pipelines | bool
+
+    - name: Configure AAP Lightspeed Remediation workflow
+      ansible.builtin.include_role:
+        name: aap-lightspeed-remediation-pipeline
+      when: aap_casc_enable_observability_pipelines | bool
+
+    - name: Configure Event-Driven Ansible Apache alert pipeline
+      ansible.builtin.include_role:
+        name: aap-eda-pipeline
+      when: aap_casc_enable_observability_pipelines | bool
+
+    - name: Configure Event-Driven Ansible ITSM webhook chat pipeline
+      ansible.builtin.include_role:
+        name: aap-eda-itsm-webhook-pipeline
+      when:
+        - aap_casc_enable_observability_pipelines | bool
+        - aap_casc_itsm_chat_webhook_delivery == 'eda'
+
+    - name: Configure AAP log forwarding into observability pipeline
+      ansible.builtin.include_role:
+        name: aap-observability-integration
+      when: aap_casc_enable_observability_pipelines | bool
+
+    - name: Configure AAP ITSM chat notification job template
+      ansible.builtin.include_role:
+        name: aap-itsm-chat-pipeline
+      when:
+        - aap_casc_enable_observability_pipelines | bool
+        - aap_casc_itsm_chat_webhook_delivery == 'eda'
+
+    - name: Configure AAP Deploy Apache Application Stack master workflow
+      ansible.builtin.include_role:
+        name: aap-apache-stack-pipeline
+
+    - name: Configure AAP VM modification workflows
+      ansible.builtin.include_role:
+        name: aap-vm-modification-pipeline
+
+    - name: Configure AAP Reset job template
+      ansible.builtin.include_role:
+        name: aap-reset-pipeline

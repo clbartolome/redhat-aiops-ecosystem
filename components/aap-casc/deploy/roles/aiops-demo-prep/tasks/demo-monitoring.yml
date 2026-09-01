@@ -1,0 +1,79 @@
+---
+- name: Ensure aiops-demo namespace is excluded from OpenShift UWM
+  kubernetes.core.k8s:
+    state: present
+    api_version: v1
+    kind: Namespace
+    name: "{{ aiops_demo_namespace }}"
+    definition:
+      metadata:
+        labels:
+          openshift.io/user-monitoring: "false"
+          argocd.argoproj.io/managed-by: "{{ aap_casc_gitops_instance_name | default('openshift-gitops') }}"
+
+- name: List legacy Apache Probe resources still in aiops-demo namespace
+  kubernetes.core.k8s_info:
+    api_version: monitoring.coreos.com/v1
+    kind: Probe
+    namespace: "{{ aiops_demo_namespace }}"
+    label_selector: app.kubernetes.io/part-of=observability
+  register: legacy_aiops_demo_probes
+
+  kubernetes.core.k8s:
+    state: absent
+    api_version: monitoring.coreos.com/v1alpha1
+    kind: AlertmanagerConfig
+    name: otel-webhook
+    namespace: "{{ aiops_demo_namespace }}"
+
+- name: Remove legacy Alertmanager webhook secret from aiops-demo
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: otel-webhook-auth
+    namespace: "{{ aiops_demo_namespace }}"
+
+- name: Remove legacy Apache Probe resources from aiops-demo namespace
+  kubernetes.core.k8s:
+    state: absent
+    api_version: monitoring.coreos.com/v1
+    kind: Probe
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ aiops_demo_namespace }}"
+  loop: "{{ legacy_aiops_demo_probes.resources | default([]) }}"
+  when: legacy_aiops_demo_probes.resources | default([]) | length > 0
+
+- name: Remove legacy Apache PrometheusRule from aiops-demo namespace
+  kubernetes.core.k8s:
+    state: absent
+    api_version: monitoring.coreos.com/v1
+    kind: PrometheusRule
+    name: apache-http-probes
+    namespace: "{{ aiops_demo_namespace }}"
+
+- name: Apply blackbox exporter manifests for Apache HTTP probes
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', aiops_demo_monitoring_template_dir ~ '/blackbox_exporter.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+
+- name: Apply Apache HTTP probe PrometheusRule
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', aiops_demo_monitoring_template_dir ~ '/openshift_apache_prometheus_rule.yaml.j2') | from_yaml }}"
+
+- name: Wait for blackbox exporter Deployment to become available
+  kubernetes.core.k8s:
+    state: present
+    api_version: apps/v1
+    kind: Deployment
+    name: blackbox-exporter
+    namespace: "{{ aiops_demo_namespace }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 180

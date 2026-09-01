@@ -1,0 +1,12 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: aiops-itsm
+  namespace: "{{ observability.namespace }}"
+  labels:
+    strimzi.io/cluster: "{{ observability.kafka_cluster_name }}"
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  topicName: aiops.itsm
+  partitions: 3
+  replicas: 1

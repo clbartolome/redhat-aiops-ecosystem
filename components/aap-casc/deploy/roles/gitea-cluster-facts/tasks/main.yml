@@ -1,0 +1,68 @@
+---
+- name: Get Gitea application secret from OpenShift
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ gitea_cluster_facts_secret_name }}"
+    namespace: "{{ gitea_cluster_facts_namespace }}"
+  register: gitea_cluster_facts_secret
+  no_log: true
+
+- name: Fail when Gitea application secret is missing
+  ansible.builtin.fail:
+    msg: >-
+      Secret {{ gitea_cluster_facts_secret_name }} not found in namespace
+      {{ gitea_cluster_facts_namespace }}. Deploy Gitea before syncing playbooks.
+  when: gitea_cluster_facts_secret.resources | default([]) | length == 0
+
+- name: Get Gitea host configuration from OpenShift
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: "{{ gitea_cluster_facts_host_configmap_name }}"
+    namespace: "{{ gitea_cluster_facts_namespace }}"
+  register: gitea_cluster_facts_host_config
+
+- name: Fail when Gitea host ConfigMap is missing
+  ansible.builtin.fail:
+    msg: >-
+      ConfigMap {{ gitea_cluster_facts_host_configmap_name }} not found in namespace
+      {{ gitea_cluster_facts_namespace }}. Deploy Gitea before syncing playbooks.
+  when: gitea_cluster_facts_host_config.resources | default([]) | length == 0
+
+- name: Set Gitea connection facts from OpenShift secrets
+  ansible.builtin.set_fact:
+    gitea_api_base: >-
+      {{
+        gitea_cluster_facts_host_config.resources[0].data.GITEA__server__ROOT_URL
+        | regex_replace('/$', '')
+      }}
+    gitea_admin_username: "{{ gitea_cluster_facts_secret.resources[0].data.ADMIN_USER | b64decode }}"
+    gitea_admin_password: "{{ gitea_cluster_facts_secret.resources[0].data.ADMIN_PASSWORD | b64decode }}"
+  no_log: true
+
+- name: Publish Gitea facts for downstream AAP roles
+  ansible.builtin.set_fact:
+    aap_platform: >-
+      {{
+        aap_platform | default({})
+        | combine(
+            {
+              'gitea': {
+                'url': gitea_api_base,
+                'username': gitea_admin_username,
+                'password': gitea_admin_password
+              }
+            },
+            recursive=true
+          )
+      }}
+    cacheable: true
+  no_log: true
+
+- name: Display Gitea cluster facts summary
+  ansible.builtin.debug:
+    msg:
+      - "Gitea namespace: {{ gitea_cluster_facts_namespace }}"
+      - "Gitea URL: {{ gitea_api_base }}"
+      - "Gitea admin user: {{ gitea_admin_username }}"

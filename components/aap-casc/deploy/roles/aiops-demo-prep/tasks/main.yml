@@ -1,0 +1,24 @@
+---
+- name: Prepare aiops-demo namespace and VM SSH keys
+  ansible.builtin.include_tasks: prepare-vms.yml
+
+- name: Prepare aiops-demo secondary UDN for VM fixed IPs
+  ansible.builtin.include_tasks: prepare-udn.yml
+
+- name: Deploy demo Apache monitoring prerequisites
+  ansible.builtin.include_tasks: demo-monitoring.yml
+  when: aap_casc_enable_observability_pipelines | default(true) | bool
+
+- name: Merge VM SSH facts into platform facts
+  ansible.builtin.set_fact:
+    aap_platform: >-
+      {{
+        aap_platform | combine({
+          'virtualization': aap_platform.virtualization | combine({
+            'ssh_privatekey': aiops_demo_vms_rsa_private_key | default(aap_platform.virtualization.ssh_privatekey | default('')),
+            'ssh_publickey': aiops_demo_vms_rsa_public_key | default(aap_platform.virtualization.ssh_publickey | default(''))
+          })
+        }, recursive=True)
+      }}
+  no_log: true
+  when: aiops_demo_vms_rsa_private_key is defined

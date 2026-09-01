@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  selector:
+    matchLabels:
+      operated-prometheus: "true"
+  endpoints:
+    - port: web
+      interval: 30s
+      path: /metrics

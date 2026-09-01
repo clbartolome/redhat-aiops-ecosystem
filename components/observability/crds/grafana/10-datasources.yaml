@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: http://loki.{{ observability.namespace }}.svc:3100
+        isDefault: true
+        editable: false
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        access: proxy
+        url: http://prometheus-operated.{{ observability.namespace }}.svc:9090
+        editable: false

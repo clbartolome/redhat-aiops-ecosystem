@@ -1,0 +1,24 @@
+---
+- name: Configure AAP Reset job template
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../group_vars/all/aap_reset_pipeline.yml
+    - ../../group_vars/all/gitea_repos.yml
+  vars:
+    gitea_repos_local_base: "{{ playbook_dir }}"
+    gitea_repos_sync_only:
+      - Playbooks
+  tasks:
+    - name: Discover platform connection facts
+      ansible.builtin.include_role:
+        name: aap-platform-facts
+      when: aap_platform is not defined
+
+    - name: Push Playbooks repository to Gitea
+      ansible.builtin.include_role:
+        name: gitea-repos
+
+    - name: Register Reset job template in AAP
+      ansible.builtin.include_role:
+        name: aap-reset-pipeline

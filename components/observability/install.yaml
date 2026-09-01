@@ -1,0 +1,290 @@
+---
+- name: Create observability project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ observability.namespace }}"
+        labels:
+          openshift.io/user-monitoring: "false"
+
+- name: Ensure observability namespace stays excluded from OpenShift UWM
+  kubernetes.core.k8s:
+    state: present
+    api_version: v1
+    kind: Namespace
+    name: "{{ observability.namespace }}"
+    definition:
+      metadata:
+        labels:
+          openshift.io/user-monitoring: "false"
+
+- name: Build otel-webhook-auth from templated env
+  ansible.builtin.set_fact:
+    observability_otel_webhook_auth: "{{ observability_otel_webhook_auth | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/observability/otel-webhook-auth.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create otel-webhook-auth secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: otel-webhook-auth
+        namespace: "{{ observability.namespace }}"
+        labels:
+          app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+      type: Opaque
+      stringData: "{{ observability_otel_webhook_auth }}"
+
+- name: Build grafana-admin from templated env
+  ansible.builtin.set_fact:
+    observability_grafana_admin: "{{ observability_grafana_admin | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+  loop: "{{ lookup('template', playbook_dir ~ '/components/observability/grafana-admin.env').splitlines() | select('match', '^[A-Za-z_][A-Za-z0-9_]*=') | list }}"
+
+- name: Create grafana-admin secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: grafana-admin
+        namespace: "{{ observability.namespace }}"
+        labels:
+          app.kubernetes.io/name: grafana
+          app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+      type: Opaque
+      stringData: "{{ observability_grafana_admin }}"
+
+- name: Check Strimzi Kafka CRD is installed
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: kafkas.kafka.strimzi.io
+  register: observability_kafka_crd
+
+- name: Fail when AMQ Streams (Strimzi) operator is not installed
+  ansible.builtin.fail:
+    msg: >-
+      CRD kafkas.kafka.strimzi.io is not installed. Install Red Hat OpenShift
+      Streams for Apache Kafka (amq-streams) from OperatorHub before running
+      observability install (see README).
+  when: observability_kafka_crd.resources | length == 0
+
+- name: Collect Prometheus Operator prerequisite manifests
+  ansible.builtin.set_fact:
+    observability_prerequisite_manifest_files: >-
+      {{ query('fileglob', playbook_dir ~ '/components/observability/crds/prerequisites/*.yaml') | sort }}
+
+- name: Apply Prometheus Operator prerequisites
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ observability.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+  loop: "{{ observability_prerequisite_manifest_files }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Wait for Prometheus Operator subscription to install CSV
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+    name: prometheus
+    namespace: "{{ observability.namespace }}"
+  register: observability_prometheus_subscription
+  until: >-
+    observability_prometheus_subscription.resources | length > 0
+    and observability_prometheus_subscription.resources[0].status.installedCSV is defined
+  retries: 60
+  delay: 10
+
+- name: Wait for Prometheus Operator CSV to succeed
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    name: "{{ observability_prometheus_subscription.resources[0].status.installedCSV }}"
+    namespace: "{{ observability.namespace }}"
+  register: observability_prometheus_csv
+  until: >-
+    observability_prometheus_csv.resources | default([])
+    | selectattr('status.phase', 'equalto', 'Succeeded')
+    | list
+    | length > 0
+  retries: 60
+  delay: 10
+
+- name: Check Prometheus Operator CRD is installed
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: prometheuses.monitoring.coreos.com
+  register: observability_prometheus_crd
+
+- name: Fail when Prometheus Operator is not installed
+  ansible.builtin.fail:
+    msg: >-
+      CRD prometheuses.monitoring.coreos.com is not installed after the
+      Prometheus Operator subscription in {{ observability.namespace }} was
+      applied. Inspect the subscription and CSV with:
+      oc get subscription,csv -n {{ observability.namespace }}.
+  when: observability_prometheus_crd.resources | length == 0
+
+- name: Collect observability stack manifest files
+  ansible.builtin.set_fact:
+    observability_manifest_files: >-
+      {{
+        observability_manifest_files | default([]) +
+        (query('fileglob', playbook_dir ~ '/components/observability/crds/' ~ item ~ '/*.yaml') | sort)
+      }}
+  loop:
+    - rbac
+    - kafka
+    - otel
+    - loki
+    - grafana
+    - prometheus
+
+- name: Apply observability manifests
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ observability.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+  loop: "{{ observability_manifest_files }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Ensure in-namespace Prometheus monitors the observability suite and Apache probes
+  ansible.builtin.set_fact:
+    observability_monitoring_namespace: "{{ observability.namespace }}"
+
+- name: Ensure in-namespace Prometheus sends alerts to suite Alertmanager
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    api_version: monitoring.coreos.com/v1
+    kind: Prometheus
+    name: "{{ observability.namespace }}"
+    namespace: "{{ observability.namespace }}"
+    definition:
+      spec:
+        alerting:
+          alertmanagers:
+            - apiVersion: v2
+              name: alertmanager-operated
+              namespace: "{{ observability.namespace }}"
+              port: web
+        serviceMonitorNamespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
+        podMonitorNamespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
+        probeSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+        probeNamespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
+        ruleNamespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
+
+- name: Wait for Kafka cluster
+  block:
+    - name: Wait for Kafka cluster Ready
+      kubernetes.core.k8s_info:
+        api_version: kafka.strimzi.io/v1
+        kind: Kafka
+        name: "{{ observability.kafka_cluster_name }}"
+        namespace: "{{ observability.namespace }}"
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+  rescue:
+    - name: Collect observability namespace pods after Kafka wait failure
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ observability.namespace }}"
+      register: observability_kafka_failure_pods
+
+    - name: Record observability pods not in Running phase
+      ansible.builtin.set_fact:
+        observability_non_running_pods: >-
+          {{
+            observability_kafka_failure_pods.resources | default([])
+            | rejectattr('status.phase', 'equalto', 'Running')
+            | map(attribute='metadata.name')
+            | list
+          }}
+
+    - name: Fail when Kafka cluster does not become Ready
+      ansible.builtin.fail:
+        msg: >-
+          Kafka/{{ observability.kafka_cluster_name }} in namespace
+          {{ observability.namespace }} did not reach Ready within 600s.
+          Non-running pods:
+          {{ observability_non_running_pods | default(['(none listed)']) | join(', ') }}.
+          Inspect them with:
+          oc get kafka,pods -n {{ observability.namespace }} &&
+          oc describe kafka {{ observability.kafka_cluster_name }} -n
+          {{ observability.namespace }}.
+          If any pod reports bitnami/kubectl:1.32 manifest unknown, that tag
+          was removed from Docker Hub — see README "Troubleshooting".
+          Use registry.k8s.io/kubectl:v1.32.x or bitnamilegacy/kubectl
+          instead, and confirm AMQ Streams (amq-streams) is the installed
+          Kafka operator.
+
+- name: Wait for in-namespace Prometheus to become available
+  kubernetes.core.k8s_info:
+    api_version: monitoring.coreos.com/v1
+    kind: Prometheus
+    name: "{{ observability.namespace }}"
+    namespace: "{{ observability.namespace }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 600
+  register: observability_prometheus_ready
+
+- name: Wait for in-namespace Alertmanager workload to become ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: StatefulSet
+    name: "alertmanager-{{ observability.namespace }}"
+    namespace: "{{ observability.namespace }}"
+  register: observability_alertmanager_statefulset
+  until: >-
+    observability_alertmanager_statefulset.resources | length > 0
+    and (
+      observability_alertmanager_statefulset.resources[0].status.readyReplicas | default(0) | int
+      >= observability_alertmanager_statefulset.resources[0].spec.replicas | default(1) | int
+    )
+  retries: 60
+  delay: 10
+
+- name: Wait for grafana Deployment
+  kubernetes.core.k8s:
+    state: present
+    api_version: apps/v1
+    kind: Deployment
+    name: grafana
+    namespace: "{{ observability.namespace }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+
+- name: Show observability connection details
+  ansible.builtin.debug:
+    msg:
+      - "Grafana URL: https://{{ observability.grafana.host }}"
+      - "Grafana admin user: {{ observability.grafana.admin_user }}"

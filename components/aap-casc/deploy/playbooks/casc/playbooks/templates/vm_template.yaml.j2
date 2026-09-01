@@ -1,0 +1,78 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ vm_name }}
+  namespace: {{ vm_namespace }}
+  annotations:
+    {{ vm_ip_annotation }}: "{{ vm_ip }}"
+spec:
+  runStrategy: Always
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |-
+          [{"name":"{{ vm_udn_name }}","namespace":"{{ vm_namespace }}","interface":"{{ vm_udn_pod_interface }}","ips":["{{ vm_ip }}/{{ vm_ip_prefix_length }}"]}]
+    spec:
+      domain:
+        cpu:
+          cores: {{ cpus }}
+        resources:
+          requests:
+            memory: {{ mem }}Gi
+        devices:
+          disks:
+            - name: container-boot-disk
+              disk:
+                bus: virtio
+            - name: cloudinit-disk
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+              ports:
+                - port: 22
+                  protocol: TCP
+                - port: 80
+                  protocol: TCP
+            - name: {{ vm_udn_pod_interface }}
+              bridge: {}
+      networks:
+        - name: default
+          pod: {}
+        - name: {{ vm_udn_pod_interface }}
+          multus:
+            networkName: {{ vm_namespace }}/{{ vm_udn_name }}
+      volumes:
+        - name: container-boot-disk
+          containerDisk:
+            image: {{ image }}
+            imagePullPolicy: IfNotPresent
+        - name: cloudinit-disk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              chpasswd:
+                expire: false
+              password: {{ password }}
+              user: fedora
+              runcmd:
+                - setsebool -P virt_qemu_ga_manage_ssh on
+            networkData: |
+              version: 2
+              ethernets:
+                {{ vm_primary_guest_interface }}:
+                  dhcp4: true
+                {{ vm_secondary_guest_interface }}:
+                  dhcp4: false
+                  addresses:
+                    - {{ vm_ip }}/{{ vm_ip_prefix_length }}
+      accessCredentials:
+        - sshPublicKey:
+            propagationMethod:
+              qemuGuestAgent:
+                users:
+                  - fedora
+            source:
+              secret:
+                secretName: {{ ssh_secret_name }}

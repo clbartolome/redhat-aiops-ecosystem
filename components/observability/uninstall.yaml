@@ -1,0 +1,69 @@
+---
+- name: Remove legacy Observability Argo CD Application
+  kubernetes.core.k8s:
+    state: absent
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: observability-stack
+    namespace: openshift-gitops
+  ignore_errors: true
+
+- name: Remove legacy Observability Argo CD repository secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: gitea-observability
+    namespace: openshift-gitops
+  ignore_errors: true
+
+- name: Collect observability manifest files
+  ansible.builtin.set_fact:
+    observability_manifest_files: >-
+      {{
+        observability_manifest_files | default([]) +
+        (query('fileglob', playbook_dir ~ '/components/observability/crds/' ~ item ~ '/*.yaml') | sort | reverse)
+      }}
+  loop:
+    - prometheus
+    - grafana
+    - loki
+    - otel
+    - kafka
+    - rbac
+
+- name: Delete observability manifests
+  kubernetes.core.k8s:
+    state: absent
+    namespace: "{{ observability.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+    wait: true
+  loop: "{{ observability_manifest_files }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Delete grafana-admin secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: grafana-admin
+    namespace: "{{ observability.namespace }}"
+
+- name: Delete otel-webhook-auth secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: otel-webhook-auth
+    namespace: "{{ observability.namespace }}"
+
+- name: Delete observability project
+  kubernetes.core.k8s:
+    state: absent
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ observability.namespace }}"
+  ignore_errors: true

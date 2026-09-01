@@ -1,0 +1,14 @@
+---
+aap_casc_config: "{{ aap_casc | default({}) }}"
+aap_casc_namespace: "{{ aap_casc_config.namespace | default('aap') }}"
+aap_casc_instance_name: "{{ aap_casc_config.instance_name | default('ansible') }}"
+aap_casc_organization: "{{ aap_casc_config.organization | default('AIOps') }}"
+aap_casc_validate_certs: "{{ aap_casc_config.validate_certs | default(false) | bool }}"
+aap_casc_aiops_demo_namespace: "{{ aap_casc_config.aiops_demo_namespace | default('aiops-demo') }}"
+aap_casc_controller_api_prefix: "{{ aap_casc_config.controller_api_prefix | default('/api/controller/') }}"
+aap_casc_gitops_instance_name: "{{ aap_casc_config.gitops_instance_name | default('openshift-gitops') }}"
+aap_casc_enable_observability_pipelines: "{{ aap_casc_config.enable_observability_pipelines | default(true) | bool }}"
+aap_casc_itsm_chat_webhook_delivery: "{{ aap_casc_config.itsm_chat_webhook_delivery | default('eda') }}"
+aap_casc_ah_offline_token: "{{ aap_casc_config.public_ah_token | default('') }}"
+
+openshift_virt_operator_namespace: openshift-cnv

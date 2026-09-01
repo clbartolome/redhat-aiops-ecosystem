@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blackbox-exporter
+  namespace: {{ aiops_demo_namespace | default('aiops-demo') }}
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/part-of: aiops-demo
+data:
+  blackbox.yml: |
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 5s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: []
+          method: GET
+          follow_redirects: true
+          preferred_ip_protocol: ip4
+      tcp_connect:
+        prober: tcp
+        timeout: 5s
+        tcp:
+          preferred_ip_protocol: ip4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter
+  namespace: {{ aiops_demo_namespace | default('aiops-demo') }}
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/part-of: aiops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blackbox-exporter
+        app.kubernetes.io/part-of: aiops-demo
+    spec:
+      containers:
+        - name: blackbox-exporter
+          image: quay.io/prometheus/blackbox-exporter:v0.25.0
+          args:
+            - --config.file=/etc/blackbox/blackbox.yml
+          ports:
+            - name: http
+              containerPort: 9115
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blackbox
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: blackbox-exporter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter
+  namespace: {{ aiops_demo_namespace | default('aiops-demo') }}
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/part-of: aiops-demo
+spec:
+  selector:
+    app.kubernetes.io/name: blackbox-exporter
+  ports:
+    - name: http
+      port: 9115
+      targetPort: http

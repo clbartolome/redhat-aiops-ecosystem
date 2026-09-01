@@ -1,0 +1,74 @@
+---
+image: "quay.io/rhn_support_rafsanch/fedora-cloud-containerdisk:v43"
+vm_namespace: aiops-demo
+ssh_secret_name: authorized-keys
+gitops_infrastructure_dest_namespace: "{{ vm_namespace }}"
+
+gitops_infrastructure_app_name: infrastructure-vms
+gitops_infrastructure_app_namespace: openshift-gitops
+gitops_infrastructure_argocd_project: default
+gitops_infrastructure_gitea_repo: Infrastructure
+gitops_infrastructure_source_path: vms
+gitops_infrastructure_source_branch: main
+gitops_infrastructure_repo_secret_name: gitea-infrastructure
+gitops_infrastructure_validate_certs: false
+gitops_infrastructure_gitea_insecure: true
+
+apache_app_docroot: /var/www/html
+apache_app_rpm_packages: "httpd,git"
+apache_app_enabled_services: httpd
+apache_app_package: httpd
+apache_app_git_package: git
+apache_app_service: httpd
+apache_app_default_branch: main
+apache_app_validate_certs: false
+
+apache_exposure_route_wait_retries: 30
+apache_exposure_route_wait_delay: 10
+apache_exposure_service_port: 80
+
+openshift_apache_monitoring_probe_job: apache-http
+openshift_apache_monitoring_probe_interval: 15s
+openshift_apache_monitoring_blackbox_prober: blackbox-exporter.aiops-demo.svc:9115
+openshift_apache_monitoring_namespace: "{{ observability.namespace | default('observability') }}"
+
+itsm_apache_app_asset_type_name: Generic Application
+
+chat_aiops_channel_name: operations
+
+# Post remediation summary as a thread reply under the incident.created chat message.
+# When false, remediation does not post to chat (ITSM comment + close still run).
+apache_troubleshoot_post_chat_summary: true
+
+# Post VM modification completion as a thread reply under request.submitted chat message.
+vm_modification_post_chat_summary: false
+
+openshift_cluster_domain: apps.ocp.zaskan.es
+
+vm_ip_pool_start: 192.168.100.100
+vm_ip_pool_end: 192.168.100.250
+vm_ip_prefix_length: 24
+vm_ip_annotation: aiops.io/ip-address
+vm_udn_name: aiops-vm-network
+vm_udn_pod_interface: net1
+vm_primary_guest_interface: enp1s0
+vm_secondary_guest_interface: enp2s0
+
+vm_manifest_gitea_repo: Infrastructure
+vm_manifest_gitea_path: vms
+vm_manifest_gitea_branch: main
+vm_manifest_workdir: /tmp/vm-manifest
+vm_manifest_password_length: 16
+vm_manifest_git_user_name: aiops-automation
+vm_manifest_git_user_email: aiops@example.com
+vm_manifest_validate_certs: false
+vm_manifest_gitea_internal_host: gitea-http.gitea.svc.cluster.local:3000
+vm_manifest_gitea_use_internal: >-
+  {{ lookup('ansible.builtin.env', 'KUBERNETES_SERVICE_HOST', default='') | trim | length > 0 }}
+
+apache_troubleshoot_gitea_workdir: /tmp/apache-troubleshoot-gitops
+apache_exposure_gitea_internal_host: gitea-http.gitea.svc.cluster.local:3000
+
+aap_vm_pipeline_organization: AIOps
+aap_vm_pipeline_infrastructure_inventory: AIOps Infrastructure
+aap_vm_pipeline_inventory_source: ITSM Assets

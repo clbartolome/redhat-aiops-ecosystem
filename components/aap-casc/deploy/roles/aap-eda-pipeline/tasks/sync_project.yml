@@ -1,0 +1,73 @@
+---
+- name: Look up EDA project before sync
+  ansible.builtin.uri:
+    url: >-
+      {{ eda_project_sync_controller_host }}/api/eda/v1/projects/?name={{
+      eda_project_sync_name | urlencode }}&organization__name={{
+      eda_project_sync_organization | urlencode }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ eda_project_sync_controller_token }}"
+    validate_certs: "{{ eda_project_sync_validate_certs }}"
+    status_code: 200
+  register: eda_project_sync_lookup
+
+- name: Fail when EDA project was not found for sync
+  ansible.builtin.fail:
+    msg: >-
+      EDA project '{{ eda_project_sync_name }}' was not found in organization
+      '{{ eda_project_sync_organization }}'.
+  when: eda_project_sync_lookup.json.count | default(0) == 0
+
+- name: Wait until EDA project import is idle
+  ansible.builtin.uri:
+    url: >-
+      {{ eda_project_sync_controller_host }}/api/eda/v1/projects/{{
+      eda_project_sync_lookup.json.results[0].id }}/
+    method: GET
+    headers:
+      Authorization: "Bearer {{ eda_project_sync_controller_token }}"
+    validate_certs: "{{ eda_project_sync_validate_certs }}"
+    status_code: 200
+  register: eda_project_sync_status
+  until: eda_project_sync_status.json.import_state in ['completed', 'failed']
+  retries: "{{ eda_project_sync_wait_retries | default(60) }}"
+  delay: "{{ eda_project_sync_wait_delay | default(10) }}"
+
+- name: Note prior EDA project import failure before requesting sync
+  ansible.builtin.debug:
+    msg: >-
+      EDA project '{{ eda_project_sync_name }}' import_state is 'failed'
+      ({{ eda_project_sync_status.json.import_error | default('no error detail') }}).
+      Requesting a new sync.
+  when: eda_project_sync_status.json.import_state == 'failed'
+
+- name: Request EDA project synchronization
+  ansible.eda.project:
+    name: "{{ eda_project_sync_name }}"
+    organization_name: "{{ eda_project_sync_organization }}"
+    sync: true
+    wait: true
+    state: present
+    controller_host: "{{ eda_project_sync_controller_host }}"
+    controller_token: "{{ eda_project_sync_controller_token }}"
+    validate_certs: "{{ eda_project_sync_validate_certs }}"
+  register: eda_project_sync_result
+  failed_when: >-
+    eda_project_sync_result.failed | default(false)
+    and not (
+      eda_project_sync_result.msg is defined
+      and 'import or sync is already running' in eda_project_sync_result.msg | lower
+    )
+  until: not (eda_project_sync_result.failed | default(false))
+  retries: "{{ eda_project_sync_sync_retries | default(30) }}"
+  delay: "{{ eda_project_sync_sync_delay | default(10) }}"
+
+- name: Fail when EDA project synchronization did not complete
+  ansible.builtin.fail:
+    msg: >-
+      EDA project '{{ eda_project_sync_name }}' sync failed:
+      {{ eda_project_sync_result.msg | default('unknown error') }}.
+      If import_state was stuck in pending, restart ansible-eda-default-worker
+      and delete the project before re-running this playbook.
+  when: eda_project_sync_result.failed | default(false)

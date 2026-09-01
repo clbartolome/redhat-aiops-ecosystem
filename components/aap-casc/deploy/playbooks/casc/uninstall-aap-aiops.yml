@@ -1,0 +1,11 @@
+---
+- name: Remove AAP CASC for AIOps demo
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../../../../vars.yaml
+
+  tasks:
+    - name: Run AAP CASC uninstall tasks
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../uninstall.yaml"

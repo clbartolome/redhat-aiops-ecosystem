@@ -1,0 +1,93 @@
+---
+- name: Ensure temporary directory for VM RSA key generation
+  ansible.builtin.file:
+    path: "{{ aiops_demo_vms_rsa_temp_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Remove stale temporary VM RSA key files if present
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa"
+    - "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa.pub"
+  no_log: true
+
+- name: Generate RSA key pair for VM access
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -t
+      - rsa
+      - -b
+      - "{{ aiops_demo_vms_rsa_key_size | string }}"
+      - -f
+      - "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa"
+      - -N
+      - ""
+      - -C
+      - ""
+      - -q
+  no_log: true
+
+- name: Read generated VM SSH private key
+  ansible.builtin.slurp:
+    src: "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa"
+  register: demo_vms_rsa_private_key_file
+  no_log: true
+
+- name: Read generated VM SSH public key
+  ansible.builtin.slurp:
+    src: "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa.pub"
+  register: demo_vms_rsa_public_key_file
+  no_log: true
+
+- name: Set VM RSA key facts from generated key pair
+  ansible.builtin.set_fact:
+    aiops_demo_vms_rsa_private_key: >-
+      {{ demo_vms_rsa_private_key_file.content | b64decode }}
+    aiops_demo_vms_rsa_public_key: >-
+      {{ demo_vms_rsa_public_key_file.content | b64decode | trim }}
+  no_log: true
+
+- name: Create authorized-keys secret in aiops-demo namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ aiops_demo_vms_rsa_secret_name }}"
+        namespace: "{{ aiops_demo_namespace }}"
+      data: "{{ { aiops_demo_vms_secret_data_key: aiops_demo_vms_rsa_public_key | b64encode } }}"
+  no_log: true
+
+- name: Create VM RSA recovery secret for AAP Virtual Machines credential
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ aiops_demo_vms_legacy_secret_name }}"
+        namespace: "{{ aiops_demo_namespace }}"
+      type: Opaque
+      stringData:
+        ssh-privatekey: "{{ aiops_demo_vms_rsa_private_key }}"
+        ssh-publickey: "{{ aiops_demo_vms_rsa_public_key }}"
+  no_log: true
+
+- name: Remove temporary VM RSA key files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa"
+    - "{{ aiops_demo_vms_rsa_temp_dir }}/id_rsa.pub"
+    - "{{ aiops_demo_vms_rsa_temp_dir }}"
+  no_log: true
+
+- name: Record that VM SSH keys were generated this run
+  ansible.builtin.set_fact:
+    demo_vms_rsa_keys_created_this_run: true

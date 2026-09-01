@@ -1,0 +1,44 @@
+---
+- name: Delete gitea manifests
+  kubernetes.core.k8s:
+    state: absent
+    namespace: "{{ gitea.namespace }}"
+    definition: "{{ lookup('template', item) | from_yaml }}"
+    wait: true
+  loop: "{{ query('fileglob', playbook_dir ~ '/components/gitea/crds/*.yaml') | sort | reverse }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Delete gitea-host-config ConfigMap
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: ConfigMap
+    name: gitea-host-config
+    namespace: "{{ gitea.namespace }}"
+
+- name: Delete gitea-secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: gitea-secret
+    namespace: "{{ gitea.namespace }}"
+
+- name: Delete postgres-secret
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: postgres-secret
+    namespace: "{{ gitea.namespace }}"
+
+- name: Delete gitea project
+  kubernetes.core.k8s:
+    state: absent
+    definition:
+      apiVersion: project.openshift.io/v1
+      kind: Project
+      metadata:
+        name: "{{ gitea.namespace }}"
+  ignore_errors: true

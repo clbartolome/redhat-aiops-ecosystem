@@ -1,0 +1,40 @@
+---
+- name: Fail when platform facts are not loaded
+  ansible.builtin.fail:
+    msg: Run aap-platform-facts role before aap-controller.
+  when: aap_platform is not defined
+
+- name: Set AAP controller connection facts for OAuth
+  ansible.builtin.set_fact:
+    aap_controller_host: "{{ aap_platform.aap.gateway_url }}"
+    aap_controller_username: "{{ aap_platform.aap.username }}"
+    aap_controller_password: "{{ aap_platform.aap.password }}"
+    aap_controller_validate_certs: "{{ aap_casc_validate_certs | default(false) | bool }}"
+  no_log: true
+
+- name: Obtain AAP gateway OAuth token for awx.awx modules
+  ansible.builtin.uri:
+    url: "{{ aap_controller_host }}/api/gateway/v1/tokens/"
+    method: POST
+    user: "{{ aap_controller_username }}"
+    password: "{{ aap_controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_controller_validate_certs }}"
+    body_format: json
+    body:
+      description: "{{ aap_controller_token_description }}"
+      scope: "{{ aap_controller_token_scope }}"
+    status_code: [200, 201]
+  register: aap_controller_gateway_token_create
+  no_log: true
+
+- name: Set AAP controller OAuth token fact
+  ansible.builtin.set_fact:
+    aap_controller_oauthtoken: "{{ aap_controller_gateway_token_create.json.token }}"
+  no_log: true
+
+- name: Propagate OAuth token to role-specific fact when requested
+  ansible.builtin.set_fact:
+    "{{ aap_controller_token_fact_name }}": "{{ aap_controller_oauthtoken }}"
+  no_log: true
+  when: aap_controller_token_fact_name is defined

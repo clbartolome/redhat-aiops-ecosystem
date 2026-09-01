@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-downstream-config
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: otel-collector-downstream
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    receivers:
+      kafka/aap:
+        brokers:
+          - {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+        topic: aiops.aap.logs
+        encoding: text
+        group_id: otel-collector-downstream-aap
+        initial_offset: latest
+        protocol_version: 2.0.0
+      kafka/alertmanager:
+        brokers:
+          - {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+        topic: aiops.alertmanager
+        encoding: text
+        group_id: otel-collector-downstream-alertmanager
+        protocol_version: 2.0.0
+      kafka/itsm:
+        brokers:
+          - {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+        topic: aiops.itsm
+        encoding: text
+        group_id: otel-collector-downstream-itsm
+        protocol_version: 2.0.0
+
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 256
+      transform/alertmanager:
+        log_statements:
+          - context: log
+            statements:
+              - set(resource.attributes["aiops_source"], "alertmanager")
+              - merge_maps(cache, ParseJSON(body), "upsert") where IsString(body)
+              - merge_maps(cache, body, "upsert") where IsMap(body)
+              - set(resource.attributes["alert_status"], cache["status"]) where cache["status"] != nil
+              - set(resource.attributes["alertname"], cache["commonLabels"]["alertname"]) where cache["commonLabels"]["alertname"] != nil
+              - set(body, String(cache)) where IsMap(cache)
+      transform/itsm:
+        log_statements:
+          - context: log
+            statements:
+              - set(resource.attributes["aiops_source"], "itsm")
+              - merge_maps(cache, ParseJSON(body), "upsert") where IsString(body)
+              - merge_maps(cache, body, "upsert") where IsMap(body)
+              - set(body, String(cache)) where IsMap(cache)
+      transform/aap:
+        log_statements:
+          - context: log
+            statements:
+              - set(resource.attributes["aiops_source"], "aap")
+
+    exporters:
+      otlphttp/loki:
+        endpoint: http://loki.{{ observability.namespace }}.svc:3100/otlp
+        tls:
+          insecure: true
+
+    service:
+      extensions: [health_check]
+      telemetry:
+        metrics:
+          level: basic
+          address: 0.0.0.0:8889
+      pipelines:
+        logs/aap:
+          receivers: [kafka/aap]
+          processors: [transform/aap, batch]
+          exporters: [otlphttp/loki]
+        logs/alertmanager:
+          receivers: [kafka/alertmanager]
+          processors: [transform/alertmanager, batch]
+          exporters: [otlphttp/loki]
+        logs/itsm:
+          receivers: [kafka/itsm]
+          processors: [transform/itsm, batch]
+          exporters: [otlphttp/loki]

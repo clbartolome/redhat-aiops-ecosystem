@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-downstream
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: otel-collector-downstream
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector-downstream
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-collector-downstream
+        app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+    spec:
+      containers:
+        - name: otel-collector
+          image: "{{ observability.otel_collector_image }}"
+          args:
+            - --config=/etc/otel/config.yaml
+          ports:
+            - name: health
+              containerPort: 13133
+            - name: metrics
+              containerPort: 8889
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-downstream-config

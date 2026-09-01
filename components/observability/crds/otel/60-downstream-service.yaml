@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-downstream
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: otel-collector-downstream
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector-downstream
+  ports:
+    - name: health
+      port: 13133
+      targetPort: health
+    - name: metrics
+      port: 8889
+      targetPort: metrics

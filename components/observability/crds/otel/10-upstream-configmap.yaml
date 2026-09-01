@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-upstream-config
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: otel-collector-upstream
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      basicauth/alertmanager:
+        htpasswd:
+          inline: |
+            {{ observability.otel_webhook.alertmanager_username }}: {{ observability.otel_webhook.alertmanager_password }}
+      basicauth/itsm:
+        htpasswd:
+          inline: |
+            {{ observability.otel_webhook.itsm_username }}: {{ observability.otel_webhook.itsm_password }}
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      tcplog/aap:
+        listen_address: 0.0.0.0:8093
+        operators:
+          - type: regex_parser
+            regex: '^(?P<body>.*)$'
+      webhookevent/alertmanager:
+        endpoint: 0.0.0.0:8090
+        path: /v1/alerts
+        health_path: /health/alertmanager
+      webhookevent/itsm:
+        endpoint: 0.0.0.0:8091
+        path: /v1/itsm
+        health_path: /health/itsm
+      webhookevent/aap:
+        endpoint: 0.0.0.0:8092
+        path: /v1/aap/logs
+        health_path: /health/aap
+
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 256
+      transform/alertmanager_kafka:
+        log_statements:
+          - context: log
+            statements:
+              - set(body, ParseJSON(body)) where IsString(body)
+      transform/itsm_kafka:
+        log_statements:
+          - context: log
+            statements:
+              - set(body, ParseJSON(body)) where IsString(body)
+      transform/aap_kafka:
+        log_statements:
+          - context: log
+            statements:
+              - set(body, ParseJSON(body)) where IsString(body)
+
+    exporters:
+      kafka/alertmanager:
+        brokers:
+          - {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+        topic: aiops.alertmanager
+        encoding: raw
+        protocol_version: 2.0.0
+      kafka/itsm:
+        brokers:
+          - {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+        topic: aiops.itsm
+        encoding: raw
+        protocol_version: 2.0.0
+      kafka/aap:
+        brokers:
+          - {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+        topic: aiops.aap.logs
+        encoding: raw
+        protocol_version: 2.0.0
+      prometheus:
+        endpoint: 0.0.0.0:8889
+
+    service:
+      extensions: [health_check, basicauth/alertmanager, basicauth/itsm]
+      pipelines:
+        logs/alertmanager:
+          receivers: [webhookevent/alertmanager]
+          processors: [transform/alertmanager_kafka, batch]
+          exporters: [kafka/alertmanager]
+        logs/itsm:
+          receivers: [webhookevent/itsm]
+          processors: [transform/itsm_kafka, batch]
+          exporters: [kafka/itsm]
+        logs/aap_webhook:
+          receivers: [webhookevent/aap]
+          processors: [transform/aap_kafka, batch]
+          exporters: [kafka/aap]
+        logs/aap_tcp:
+          receivers: [tcplog/aap]
+          processors: [transform/aap_kafka, batch]
+          exporters: [kafka/aap]
+        logs/otlp:
+          receivers: [otlp]
+          processors: [transform/aap_kafka, batch]
+          exporters: [kafka/aap]
+        metrics:
+          receivers: [otlp]
+          exporters: [prometheus]

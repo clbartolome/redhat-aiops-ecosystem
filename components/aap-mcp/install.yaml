@@ -1,0 +1,173 @@
+---
+- name: Check Ansible Automation Platform instance exists
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_mcp.instance_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_instance
+
+- name: Fail when Ansible Automation Platform instance is missing
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_mcp.instance_name }} not found in
+      namespace {{ aap_mcp.namespace }}. Deploy AAP before installing aap-mcp.
+  when: aap_instance.resources | length == 0
+
+- name: Set AAP gateway connection facts
+  ansible.builtin.set_fact:
+    aap_gateway_url: "{{ aap_instance.resources[0].status.URL }}"
+    aap_admin_user: "{{ aap_instance.resources[0].status.adminUser }}"
+    aap_admin_password_secret: "{{ aap_instance.resources[0].status.adminPasswordSecret }}"
+
+- name: Check for existing AAP MCP token secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_mcp.token_secret_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_token_secret
+  when: aap_mcp.token | default('') | length == 0
+
+- name: Use token from vars
+  ansible.builtin.set_fact:
+    aap_mcp_token_value: "{{ aap_mcp.token }}"
+  when: aap_mcp.token | default('') | length > 0
+
+- name: Use existing AAP MCP token from secret
+  ansible.builtin.set_fact:
+    aap_mcp_token_value: "{{ aap_mcp_token_secret.resources[0].data.token | b64decode }}"
+  when:
+    - aap_mcp.token | default('') | length == 0
+    - aap_mcp_token_secret.resources | length > 0
+
+- name: Create AAP MCP OAuth token
+  when:
+    - aap_mcp.token | default('') | length == 0
+    - aap_mcp_token_secret.resources | length == 0
+  block:
+    - name: Get AAP admin password
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: "{{ aap_admin_password_secret }}"
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_admin_secret
+
+    - name: Create OAuth token via platform gateway API
+      ansible.builtin.uri:
+        url: "{{ aap_gateway_url }}/api/gateway/v1/tokens/"
+        method: POST
+        user: "{{ aap_admin_user }}"
+        password: "{{ aap_admin_secret.resources[0].data.password | b64decode }}"
+        force_basic_auth: true
+        validate_certs: "{{ aap_mcp.validate_certs | default(false) | bool }}"
+        body_format: json
+        body:
+          description: "{{ aap_mcp.token_description }}"
+          scope: "{{ aap_mcp.token_scope }}"
+        status_code: [200, 201]
+      register: aap_token_response
+
+    - name: Set created AAP MCP token value
+      ansible.builtin.set_fact:
+        aap_mcp_token_value: "{{ aap_token_response.json.token }}"
+
+    - name: Store AAP MCP token in secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ aap_mcp.token_secret_name }}"
+            namespace: "{{ aap_mcp.namespace }}"
+          type: Opaque
+          stringData:
+            token: "{{ aap_mcp_token_value }}"
+
+- name: Enable MCP on Ansible Automation Platform instance
+  kubernetes.core.k8s:
+    state: present
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_mcp.instance_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+    merge_type: merge
+    definition: "{{ lookup('template', playbook_dir ~ '/components/aap-mcp/mcp-spec.yaml.j2') | from_yaml }}"
+
+- name: Wait for AAP MCP Deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ aap_mcp.instance_name }}-mcp"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_deployment
+  until:
+    - aap_mcp_deployment.resources | length > 0
+    - aap_mcp_deployment.resources[0].status.availableReplicas | default(0) | int > 0
+  retries: 30
+  delay: 10
+
+- name: Wait for AAP MCP Route
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: "{{ aap_mcp.instance_name }}-mcp"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_route
+  until: aap_mcp_route.resources | length > 0
+  retries: 12
+  delay: 10
+
+- name: Get AAP MCP Service
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: "{{ aap_mcp.instance_name }}-mcp"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_service
+
+- name: Set AAP MCP service port
+  ansible.builtin.set_fact:
+    aap_mcp_service_port: >-
+      {{
+        (
+          aap_mcp_service.resources[0].spec.ports
+          | selectattr('name', 'equalto', 'http')
+          | map(attribute='port')
+          | list
+          | first
+        )
+        | default(aap_mcp_service.resources[0].spec.ports[0].port, true)
+      }}
+  when: aap_mcp_service.resources | length > 0
+
+- name: Set default AAP MCP URL
+  ansible.builtin.set_fact:
+    aap_mcp_effective_url: >-
+      {{
+        aap_mcp.url
+        | default(
+            'http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc:'
+            ~ (aap_mcp_service_port | default(aap_mcp.port | default(8086)) | string) ~ '/mcp/',
+            true
+          )
+      }}
+
+- name: Propagate discovered AAP MCP connection details
+  ansible.builtin.set_fact:
+    aap_mcp: >-
+      {{
+        aap_mcp | combine({
+          'port': aap_mcp_service_port | default(aap_mcp.port | default(8086)),
+          'url': aap_mcp_effective_url,
+          'token': aap_mcp_token_value
+        }, recursive=True)
+      }}
+
+- name: Show AAP MCP connection details
+  ansible.builtin.debug:
+    msg:
+      - "AAP MCP URL: {{ aap_mcp.url }}"
+      - "AAP MCP token: created (stored in secret {{ aap_mcp.token_secret_name }})"

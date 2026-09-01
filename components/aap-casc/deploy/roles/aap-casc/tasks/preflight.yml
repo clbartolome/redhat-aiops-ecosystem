@@ -1,0 +1,33 @@
+---
+- name: Fail when platform facts are not loaded
+  ansible.builtin.fail:
+    msg: Run aap-platform-facts before this pipeline.
+  when: aap_platform is not defined
+
+- name: Set AAP controller connection facts from platform facts
+  ansible.builtin.set_fact:
+    aap_casc_controller_host: "{{ aap_platform.aap.gateway_url }}"
+    aap_casc_controller_username: "{{ aap_platform.aap.username }}"
+    aap_casc_controller_password: "{{ aap_platform.aap.password }}"
+    aap_casc_openshift_namespace: "{{ aap_platform.aap.namespace }}"
+    aap_casc_ah_offline_token: "{{ aap_platform_ah_offline_token }}"
+  no_log: true
+
+- name: Fail when VM SSH private key is missing from platform facts
+  ansible.builtin.fail:
+    msg: >-
+      aap_platform.virtualization.ssh_privatekey is missing. Re-run aiops-demo-prep
+      to populate VM SSH keys.
+  when: aap_platform.virtualization.ssh_privatekey | default('') | trim | length == 0
+
+- name: Verify AAP Controller API responds
+  ansible.builtin.uri:
+    url: "{{ aap_casc_controller_host }}/api/controller/v2/ping/"
+    method: GET
+    user: "{{ aap_casc_controller_username }}"
+    password: "{{ aap_casc_controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_casc_validate_certs }}"
+    status_code: 200
+  no_log: true
+

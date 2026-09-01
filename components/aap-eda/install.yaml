@@ -1,0 +1,335 @@
+---
+- name: Check Ansible Automation Platform instance exists
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_eda.instance_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_instance
+
+- name: Fail when Ansible Automation Platform instance is missing
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_eda.instance_name }} not found in
+      namespace {{ aap_eda.namespace }}. Deploy AAP before installing aap-eda.
+  when: aap_instance.resources | length == 0
+
+- name: Check Event-Driven Ansible CRD is installed
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: edas.eda.ansible.com
+  register: aap_eda_crd
+
+- name: Fail when Event-Driven Ansible CRD is not installed
+  ansible.builtin.fail:
+    msg: >-
+      CRD edas.eda.ansible.com is not installed. Install the AAP operator with
+      Event-Driven Ansible support before running aap-eda install.
+  when: aap_eda_crd.resources | length == 0
+
+- name: Set AAP EDA deployment names
+  ansible.builtin.set_fact:
+    aap_eda_deployment_names:
+      - "{{ aap_eda.instance_name }}-eda-api"
+      - "{{ aap_eda.instance_name }}-eda-activation-worker"
+      - "{{ aap_eda.instance_name }}-eda-default-worker"
+      - "{{ aap_eda.instance_name }}-eda-event-stream"
+    aap_eda_cr_name: "{{ aap_eda.instance_name }}-eda"
+    aap_eda_cr_present: false
+
+- name: Enable EDA on Ansible Automation Platform instance
+  kubernetes.core.k8s:
+    state: present
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_eda.instance_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+    merge_type: merge
+    definition: "{{ lookup('template', playbook_dir ~ '/components/aap-eda/eda-spec.yaml.j2') | from_yaml }}"
+
+- name: Read Ansible Automation Platform after enabling EDA
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_eda.instance_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_instance_after_enable
+
+- name: Fail when EDA remains disabled on AnsibleAutomationPlatform
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_eda.instance_name }} still has
+      spec.eda.disabled=true after install patch. Inspect the AAP operator and
+      CR status with: oc describe ansibleautomationplatform {{ aap_eda.instance_name }}
+      -n {{ aap_eda.namespace }}
+  when: aap_instance_after_enable.resources[0].spec.eda.disabled | default(false) | bool
+
+- name: Wait for EDA custom resource
+  kubernetes.core.k8s_info:
+    api_version: eda.ansible.com/v1alpha1
+    kind: EDA
+    name: "{{ aap_eda_cr_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_cr_info
+  until: aap_eda_cr_info.resources | default([]) | length > 0
+  retries: "{{ aap_eda_cr_wait_retries | default(60) }}"
+  delay: "{{ aap_eda_cr_wait_delay | default(10) }}"
+  failed_when: false
+
+- name: Set EDA custom resource presence after initial wait
+  ansible.builtin.set_fact:
+    aap_eda_cr_present: "{{ aap_eda_cr_info.resources | default([]) | length > 0 }}"
+
+- name: Reset stuck EDA enablement with disable and re-enable cycle
+  when: not aap_eda_cr_present | bool
+  block:
+    - name: Temporarily disable EDA to reset operator reconciliation
+      kubernetes.core.k8s:
+        state: present
+        api_version: aap.ansible.com/v1alpha1
+        kind: AnsibleAutomationPlatform
+        name: "{{ aap_eda.instance_name }}"
+        namespace: "{{ aap_eda.namespace }}"
+        merge_type: merge
+        definition:
+          spec:
+            eda:
+              disabled: true
+
+    - name: Wait for EDA custom resource removal during reconcile reset
+      kubernetes.core.k8s_info:
+        api_version: eda.ansible.com/v1alpha1
+        kind: EDA
+        name: "{{ aap_eda_cr_name }}"
+        namespace: "{{ aap_eda.namespace }}"
+      register: aap_eda_cr_removed
+      until: aap_eda_cr_removed.resources | default([]) | length == 0
+      retries: 30
+      delay: 10
+      failed_when: false
+
+    - name: Re-enable EDA on Ansible Automation Platform instance
+      kubernetes.core.k8s:
+        state: present
+        api_version: aap.ansible.com/v1alpha1
+        kind: AnsibleAutomationPlatform
+        name: "{{ aap_eda.instance_name }}"
+        namespace: "{{ aap_eda.namespace }}"
+        merge_type: merge
+        definition: "{{ lookup('template', playbook_dir ~ '/components/aap-eda/eda-spec.yaml.j2') | from_yaml }}"
+
+    - name: Wait for EDA custom resource after reconcile reset
+      kubernetes.core.k8s_info:
+        api_version: eda.ansible.com/v1alpha1
+        kind: EDA
+        name: "{{ aap_eda_cr_name }}"
+        namespace: "{{ aap_eda.namespace }}"
+      register: aap_eda_cr_info
+      until: aap_eda_cr_info.resources | default([]) | length > 0
+      retries: "{{ aap_eda_cr_wait_retries | default(60) }}"
+      delay: "{{ aap_eda_cr_wait_delay | default(10) }}"
+      failed_when: false
+
+    - name: Set EDA custom resource presence after reconcile reset
+      ansible.builtin.set_fact:
+        aap_eda_cr_present: "{{ aap_eda_cr_info.resources | default([]) | length > 0 }}"
+
+- name: List Event-Driven Ansible custom resources when expected name is missing
+  when: not aap_eda_cr_present | bool
+  kubernetes.core.k8s_info:
+    api_version: eda.ansible.com/v1alpha1
+    kind: EDA
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_cr_list
+
+- name: Resolve EDA custom resource name from cluster inventory
+  ansible.builtin.set_fact:
+    aap_eda_cr_name: "{{ aap_eda_cr_list.resources[0].metadata.name }}"
+    aap_eda_cr_info: "{{ aap_eda_cr_list }}"
+    aap_eda_cr_present: true
+  when:
+    - not aap_eda_cr_present | bool
+    - aap_eda_cr_list.resources | default([]) | length > 0
+
+- name: Fail when Event-Driven Ansible custom resource is still missing
+  ansible.builtin.fail:
+    msg: >-
+      EDA custom resource {{ aap_eda_cr_name }} was not created in namespace
+      {{ aap_eda.namespace }} after enabling spec.eda.disabled=false.
+      Check AAP operator logs and CR status:
+      oc describe ansibleautomationplatform {{ aap_eda.instance_name }} -n {{ aap_eda.namespace }}
+      oc get eda -n {{ aap_eda.namespace }}
+  when: not aap_eda_cr_present | bool
+
+- name: Read ansible-eda-api Deployment before readiness wait
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ aap_eda.instance_name }}-eda-api"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_api_deployment_precheck
+
+- name: Restart ansible-eda-api Deployment after progress deadline exceeded
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ aap_eda.instance_name }}-eda-api"
+    namespace: "{{ aap_eda.namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ lookup('pipe', 'date -Iseconds') }}"
+  when:
+    - aap_eda_api_deployment_precheck.resources | default([]) | length > 0
+    - >
+      (
+        aap_eda_api_deployment_precheck.resources[0].status.conditions | default([])
+        | selectattr('type', 'equalto', 'Progressing')
+        | selectattr('reason', 'equalto', 'ProgressDeadlineExceeded')
+        | list
+        | length
+      ) > 0
+
+- name: Wait for AAP EDA Deployments
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_deployment_wait
+  until:
+    - aap_eda_deployment_wait.resources | default([]) | length > 0
+    - aap_eda_deployment_wait.resources[0].status.availableReplicas | default(0) | int > 0
+  retries: >-
+    {{
+      (aap_eda_api_deployment_wait_retries | default(90) | int)
+      if item == (aap_eda.instance_name ~ '-eda-api')
+      else (aap_eda_deployment_wait_retries | default(60) | int)
+    }}
+  delay: "{{ aap_eda_deployment_wait_delay | default(15) }}"
+  failed_when: false
+  loop: "{{ aap_eda_deployment_names }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Track EDA Deployments that are not available yet
+  ansible.builtin.set_fact:
+    aap_eda_unavailable_deployments: >-
+      {{
+        aap_eda_unavailable_deployments | default([]) +
+        [item.item]
+      }}
+  when: >
+    item.resources | default([]) | length == 0
+    or (item.resources[0].status.availableReplicas | default(0) | int) == 0
+  loop: "{{ aap_eda_deployment_wait.results }}"
+  loop_control:
+    label: "{{ item.item | default('unknown') }}"
+
+- name: Collect ansible-eda-api pod diagnostics when API Deployment is unavailable
+  when:
+    - aap_eda_unavailable_deployments | default([]) | length > 0
+    - (aap_eda.instance_name ~ '-eda-api') in aap_eda_unavailable_deployments
+  block:
+    - name: List ansible-eda-api pods
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ aap_eda.namespace }}"
+        label_selectors:
+          - app.kubernetes.io/component=eda-api
+      register: aap_eda_api_pods
+
+    - name: Build ansible-eda-api pod diagnostic summary
+      ansible.builtin.set_fact:
+        aap_eda_api_pod_diagnostics: >-
+          {{
+            aap_eda_api_pods.resources | default([])
+            | map(attribute='metadata.name')
+            | list
+          }}
+
+- name: Fail when required AAP EDA Deployments are not available
+  ansible.builtin.fail:
+    msg: >-
+      EDA Deployments are not available in namespace {{ aap_eda.namespace }}:
+      {{ aap_eda_unavailable_deployments | join(', ') }}.
+      If ansible-eda-api init container eda-initial-data reports
+      cryptography.fernet.InvalidToken, the EDA database still contains data
+      encrypted with a previous secret key. Re-run uninstall to reset the EDA
+      database, or manually drop and recreate database {{ aap_eda.database_name | default('eda') }}
+      on {{ aap_eda.postgres_admin_secret | default('ansible-gateway-postgres-configuration') }}.
+      Inspect pod status and init container logs:
+      oc get pods -n {{ aap_eda.namespace }} -l app.kubernetes.io/component=eda-api
+      oc describe deployment {{ aap_eda.instance_name }}-eda-api -n {{ aap_eda.namespace }}
+      oc logs -n {{ aap_eda.namespace }} -l app.kubernetes.io/component=eda-api -c run-migrations --tail=50
+      oc logs -n {{ aap_eda.namespace }} -l app.kubernetes.io/component=eda-api -c eda-initial-data --tail=50
+      {% if aap_eda_api_pod_diagnostics is defined %}
+      Pods: {{ aap_eda_api_pod_diagnostics | join(', ') }}
+      {% endif %}
+  when: aap_eda_unavailable_deployments | default([]) | length > 0
+
+- name: Read Ansible Automation Platform for EDA gateway probe
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_eda.instance_name }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_aap_instance
+
+- name: Get AAP admin password for EDA gateway probe
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_eda_aap_instance.resources[0].status.adminPasswordSecret }}"
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_aap_admin_secret
+  when: aap_eda_aap_instance.resources | length > 0
+  no_log: true
+
+- name: Wait for EDA API via AAP gateway
+  ansible.builtin.uri:
+    url: "{{ aap_eda_aap_instance.resources[0].status.URL }}/api/eda/v1/decision-environments/"
+    user: "{{ aap_eda_aap_instance.resources[0].status.adminUser }}"
+    password: "{{ aap_eda_aap_admin_secret.resources[0].data.password | b64decode }}"
+    method: GET
+    validate_certs: false
+    force_basic_auth: true
+    status_code: [200, 401, 403, 500, 502, 503]
+    return_content: true
+  register: aap_eda_gateway_probe
+  until: aap_eda_gateway_probe.status == 200
+  retries: "{{ aap_eda_gateway_probe_retries | default(30) }}"
+  delay: "{{ aap_eda_gateway_probe_delay | default(10) }}"
+  failed_when: false
+  no_log: true
+  when:
+    - aap_eda_aap_instance.resources | length > 0
+    - aap_eda_aap_admin_secret.resources | default([]) | length > 0
+
+- name: Fail when EDA API is not ready via AAP gateway
+  ansible.builtin.fail:
+    msg: >-
+      EDA API is not ready at {{ aap_eda_aap_instance.resources[0].status.URL }}/api/eda/v1/
+      (HTTP {{ aap_eda_gateway_probe.status | default('unknown') }}).
+      {% if aap_eda_gateway_probe.json is defined %}
+      Response: {{ aap_eda_gateway_probe.json }}
+      {% elif aap_eda_gateway_probe.content is defined %}
+      Response: {{ aap_eda_gateway_probe.content | truncate(300, True) }}
+      {% endif %}
+      Restart deployment {{ aap_eda.instance_name }}-eda-api if migrations did not run.
+  when:
+    - aap_eda_aap_instance.resources | length > 0
+    - aap_eda_gateway_probe is defined
+    - aap_eda_gateway_probe.status | default(0) != 200
+
+- name: Show AAP EDA connection details
+  ansible.builtin.debug:
+    msg:
+      - "EDA CR: {{ aap_eda_cr_name }} (namespace {{ aap_eda.namespace }})"
+      - "EDA API service: http://{{ aap_eda.instance_name }}-eda-api.{{ aap_eda.namespace }}.svc:8000"
+      - "EDA event streams prefix: /eda-event-streams"

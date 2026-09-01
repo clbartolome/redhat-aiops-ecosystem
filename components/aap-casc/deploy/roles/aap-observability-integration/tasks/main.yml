@@ -1,0 +1,65 @@
+---
+- name: Set AAP log aggregator host fact
+  ansible.builtin.set_fact:
+    aap_observability_log_aggregator_host: >-
+      otel-collector-upstream.{{ observability.namespace }}.svc
+
+- name: Read AutomationController custom resource
+  kubernetes.core.k8s_info:
+    api_version: automationcontroller.ansible.com/v1beta1
+    kind: AutomationController
+    name: "{{ aap_observability_integration_controller_name }}"
+    namespace: "{{ aap_casc_namespace }}"
+  register: aap_observability_controller_cr
+
+- name: Fail when AutomationController is missing
+  ansible.builtin.fail:
+    msg: >-
+      AutomationController/{{ aap_observability_integration_controller_name }} not found in
+      namespace {{ aap_casc_namespace }}.
+  when: aap_observability_controller_cr.resources | default([]) | length == 0
+
+- name: Build observability log aggregator extra settings
+  ansible.builtin.set_fact:
+    aap_observability_log_aggregator_settings:
+      - setting: LOG_AGGREGATOR_ENABLED
+        value: "{{ aap_observability_integration_log_aggregator_enabled | bool | ternary('True', 'False') }}"
+      - setting: LOG_AGGREGATOR_HOST
+        value: '"{{ aap_observability_log_aggregator_host }}"'
+      - setting: LOG_AGGREGATOR_PORT
+        value: "{{ aap_observability_integration_log_aggregator_port | string }}"
+      - setting: LOG_AGGREGATOR_TYPE
+        value: '"{{ aap_observability_integration_log_aggregator_type }}"'
+      - setting: LOG_AGGREGATOR_TOWER_ENABLED
+        value: "True"
+
+- name: Merge observability log aggregator settings into AutomationController
+  ansible.builtin.set_fact:
+    aap_observability_controller_spec: >-
+      {{
+        aap_observability_controller_cr.resources[0].spec
+        | combine({
+            'extra_settings': (
+              aap_observability_controller_cr.resources[0].spec.extra_settings | default([])
+              | rejectattr('setting', 'in', aap_observability_log_aggregator_settings | map(attribute='setting') | list)
+              | list
+            ) + aap_observability_log_aggregator_settings
+          }, recursive=True)
+      }}
+
+- name: Apply AutomationController log aggregator settings
+  kubernetes.core.k8s:
+    state: present
+    api_version: automationcontroller.ansible.com/v1beta1
+    kind: AutomationController
+    name: "{{ aap_observability_integration_controller_name }}"
+    namespace: "{{ aap_casc_namespace }}"
+    definition:
+      spec: "{{ aap_observability_controller_spec }}"
+
+- name: Display AAP observability integration summary
+  ansible.builtin.debug:
+    msg:
+      - "AAP log aggregator host: {{ aap_observability_log_aggregator_host }}"
+      - "AAP log aggregator port: {{ aap_observability_integration_log_aggregator_port }}"
+      - "Kafka topic: {{ observability_kit_kafka_topic_aap_logs }}"

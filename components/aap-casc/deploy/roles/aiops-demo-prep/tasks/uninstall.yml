@@ -1,0 +1,121 @@
+---
+- name: Map aiops-demo namespace from install configuration
+  ansible.builtin.set_fact:
+    aiops_demo_namespace: "{{ aap_casc.aiops_demo_namespace | default(aiops_demo_namespace) }}"
+
+- name: Check whether aiops-demo namespace exists
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ aiops_demo_namespace }}"
+  register: aiops_demo_namespace_info
+
+- name: Remove aiops-demo OpenShift resources
+  when: aiops_demo_namespace_info.resources | length > 0
+  block:
+    - name: Remove Infrastructure VMs Argo CD Application
+      kubernetes.core.k8s:
+        state: absent
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: "{{ gitops_infrastructure_app_name }}"
+        namespace: "{{ gitops_infrastructure_app_namespace }}"
+      ignore_errors: true
+
+    - name: List VirtualMachines in aiops-demo
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachine
+        namespace: "{{ aiops_demo_namespace }}"
+      register: aiops_demo_virtualmachines
+      ignore_errors: true
+
+    - name: Delete VirtualMachines in aiops-demo
+      kubernetes.core.k8s:
+        state: absent
+        api_version: kubevirt.io/v1
+        kind: VirtualMachine
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ aiops_demo_namespace }}"
+        wait: true
+        wait_timeout: 180
+      loop: "{{ aiops_demo_virtualmachines.resources | default([]) }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      ignore_errors: true
+
+    - name: Wait until VirtualMachines are removed from aiops-demo
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachine
+        namespace: "{{ aiops_demo_namespace }}"
+      register: aiops_demo_virtualmachines_remaining
+      until: aiops_demo_virtualmachines_remaining.resources | length == 0
+      retries: 30
+      delay: 10
+      ignore_errors: true
+
+    - name: Delete UserDefinedNetwork for aiops-demo VMs
+      kubernetes.core.k8s:
+        state: absent
+        api_version: k8s.ovn.org/v1
+        kind: UserDefinedNetwork
+        name: "{{ aiops_demo_vm_udn_name }}"
+        namespace: "{{ aiops_demo_namespace }}"
+      ignore_errors: true
+
+    - name: Delete aiops-demo namespace
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ aiops_demo_namespace }}"
+        wait: true
+        wait_timeout: 300
+      ignore_errors: true
+
+- name: Remove AAP automation OpenShift ServiceAccount resources
+  when: uninstall_remove_aap_openshift_sa | default(true) | bool
+  block:
+    - name: Set AAP automation namespace for OpenShift cleanup
+      ansible.builtin.set_fact:
+        aap_casc_openshift_namespace: "{{ aap_platform.aap.namespace }}"
+
+    - name: Delete AAP automation ServiceAccount token secret
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Secret
+        name: "{{ aap_casc_openshift_token_secret }}"
+        namespace: "{{ aap_casc_openshift_namespace }}"
+      ignore_errors: true
+
+    - name: Delete AAP automation ServiceAccount
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: ServiceAccount
+        name: "{{ aap_casc_openshift_sa_name }}"
+        namespace: "{{ aap_casc_openshift_namespace }}"
+      ignore_errors: true
+
+    - name: Delete AAP automation ClusterRoleBinding
+      kubernetes.core.k8s:
+        state: absent
+        api_version: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        name: "{{ aap_casc_openshift_sa_name }}-{{ aap_casc_openshift_cluster_role }}"
+      ignore_errors: true
+
+- name: Display aiops-demo uninstall summary
+  ansible.builtin.debug:
+    msg:
+      - >-
+        aiops-demo namespace:
+        {{ 'removed' if aiops_demo_namespace_info.resources | length > 0 else 'not found (already absent)' }}
+      - >-
+        Argo CD Application removed: {{ gitops_infrastructure_app_name }}
+        (namespace {{ gitops_infrastructure_app_namespace }})
+      - >-
+        AAP automation OpenShift SA cleanup:
+        {{ 'performed' if uninstall_remove_aap_openshift_sa | default(true) | bool else 'skipped' }}

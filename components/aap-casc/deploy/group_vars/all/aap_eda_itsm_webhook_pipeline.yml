@@ -1,0 +1,20 @@
+---
+aap_eda_itsm_webhook_pipeline_organization: Default
+aap_eda_itsm_webhook_pipeline_validate_certs: false
+
+aap_eda_itsm_webhook_pipeline_project: AIOps Rulebooks
+aap_eda_itsm_webhook_pipeline_scm_branch: main
+
+aap_eda_itsm_webhook_pipeline_rulebook: itsm_app_chat_notifications.yml
+aap_eda_itsm_webhook_pipeline_activation_name: ITSM App Chat Activation
+aap_eda_itsm_webhook_pipeline_rulebook_source_name: listen for itsm events
+
+aap_eda_itsm_webhook_pipeline_kafka_topic_itsm: "{{ observability_kit_kafka_topic_itsm }}"
+
+# Reuse resources provisioned by aap_eda_pipeline
+aap_eda_itsm_webhook_pipeline_decision_environment: "{{ aap_eda_pipeline_decision_environment }}"
+aap_eda_itsm_webhook_pipeline_controller_credential: "{{ aap_eda_pipeline_controller_credential }}"
+aap_eda_itsm_webhook_pipeline_gitea_credential: "{{ aap_eda_pipeline_gitea_credential }}"
+aap_eda_itsm_webhook_pipeline_gitea_repo: "{{ aap_eda_pipeline_gitea_repo }}"
+aap_eda_itsm_webhook_pipeline_gitea_scm_use_internal: "{{ aap_eda_pipeline_gitea_scm_use_internal }}"
+aap_eda_itsm_webhook_pipeline_gitea_scm_internal_host: "{{ aap_eda_pipeline_gitea_scm_internal_host }}"

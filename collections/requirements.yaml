@@ -1,6 +1,9 @@
 collections:
   - name: community.general
+  - name: kubernetes.core
+    version: ">=5.0.0"
+  - name: awx.awx
+  - name: ansible.eda
   - name: https://github.com/zaskan/demos.utils.git
     type: git
     version: 1.0.2
-  - name: kubernetes.core

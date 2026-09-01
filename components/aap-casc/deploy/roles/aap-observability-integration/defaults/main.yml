@@ -1,0 +1,7 @@
+---
+aap_casc_config: "{{ aap_casc | default({}) }}"
+aap_casc_namespace: "{{ aap_casc_config.namespace | default('aap') }}"
+aap_observability_integration_controller_name: "{{ aap_casc_config.instance_name | default('ansible') }}-controller"
+aap_observability_integration_log_aggregator_enabled: true
+aap_observability_integration_log_aggregator_type: other
+aap_observability_integration_log_aggregator_port: 8093

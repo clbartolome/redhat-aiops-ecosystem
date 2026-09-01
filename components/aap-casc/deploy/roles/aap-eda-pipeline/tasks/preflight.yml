@@ -1,0 +1,62 @@
+---
+- name: Fail when platform facts are not loaded
+  ansible.builtin.fail:
+    msg: Run aap-platform-facts before this pipeline.
+  when: aap_platform is not defined
+
+- name: Set AAP controller connection facts from platform facts
+  ansible.builtin.set_fact:
+    aap_eda_pipeline_controller_host: "{{ aap_platform.aap.gateway_url }}"
+    aap_eda_pipeline_controller_username: "{{ aap_platform.aap.username }}"
+    aap_eda_pipeline_controller_password: "{{ aap_platform.aap.password }}"
+    aap_eda_pipeline_eda_url: "{{ aap_platform.aap.eda_url | default(aap_platform.aap.gateway_url) }}"
+    aap_eda_pipeline_gitea_scm_url: >-
+      {{
+        ('http://' ~ aap_eda_pipeline_gitea_scm_internal_host ~ '/'
+         ~ aap_platform.gitea.username ~ '/' ~ aap_eda_pipeline_gitea_repo ~ '.git')
+        if (aap_eda_pipeline_gitea_scm_use_internal | default(true) | bool)
+        else (
+          aap_platform.gitea.url
+          | replace('.apps.apps.', '.apps.')
+          | regex_replace('/$', '')
+          ~ '/' ~ aap_platform.gitea.username ~ '/' ~ aap_eda_pipeline_gitea_repo ~ '.git'
+        )
+      }}
+  no_log: true
+
+- name: Probe EDA API via AAP gateway
+  ansible.builtin.uri:
+    url: "{{ aap_eda_pipeline_controller_host }}/api/eda/v1/decision-environments/"
+    user: "{{ aap_eda_pipeline_controller_username }}"
+    password: "{{ aap_eda_pipeline_controller_password }}"
+    method: GET
+    validate_certs: "{{ aap_eda_pipeline_validate_certs }}"
+    force_basic_auth: true
+    status_code: [200, 401, 403, 500, 502, 503]
+    return_content: true
+  register: aap_eda_pipeline_eda_probe
+  until: aap_eda_pipeline_eda_probe.status == 200
+  retries: "{{ aap_eda_pipeline_eda_api_probe_retries | default(30) }}"
+  delay: "{{ aap_eda_pipeline_eda_api_probe_delay | default(10) }}"
+  failed_when: false
+  no_log: true
+
+- name: Fail when EDA API is not reachable via AAP gateway
+  ansible.builtin.fail:
+    msg: >-
+      EDA API probe failed at {{ aap_eda_pipeline_controller_host }}/api/eda/v1/decision-environments/
+      (HTTP {{ aap_eda_pipeline_eda_probe.status | default('unknown') }}).
+      {% if aap_eda_pipeline_eda_probe.json is defined %}
+      Response: {{ aap_eda_pipeline_eda_probe.json }}
+      {% elif aap_eda_pipeline_eda_probe.content is defined %}
+      Response: {{ aap_eda_pipeline_eda_probe.content | truncate(300, True) }}
+      {% endif %}
+      If HTTP 500 mentions missing database tables, restart deployment
+      {{ aap_platform.aap.instance_name | default('ansible') }}-eda-api in
+      {{ aap_platform.aap.namespace | default('aap') }} to rerun migrations.
+  when: aap_eda_pipeline_eda_probe.status | default(0) != 200
+
+- name: Normalize EDA URL to gateway when integrated with AAP 2.7
+  ansible.builtin.set_fact:
+    aap_eda_pipeline_eda_url: "{{ aap_eda_pipeline_controller_host }}"
+

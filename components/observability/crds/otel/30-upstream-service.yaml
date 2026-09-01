@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-upstream
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: otel-collector-upstream
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector-upstream
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: alertmanager
+      port: 8090
+      targetPort: alertmanager
+    - name: itsm
+      port: 8091
+      targetPort: itsm
+    - name: aap-logs
+      port: 8092
+      targetPort: aap-logs
+    - name: aap-log-tcp
+      port: 8093
+      targetPort: aap-log-tcp
+    - name: health
+      port: 13133
+      targetPort: health
+    - name: metrics
+      port: 8889
+      targetPort: metrics

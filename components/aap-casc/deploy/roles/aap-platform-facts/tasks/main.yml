@@ -1,0 +1,171 @@
+---
+- name: Discover Ansible Automation Platform instance
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_casc_instance_name }}"
+    namespace: "{{ aap_casc_namespace }}"
+  register: aap_platform_aap_cr
+
+- name: Fail when Ansible Automation Platform instance is missing
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_casc_instance_name }} not found in namespace
+      {{ aap_casc_namespace }}. Deploy AAP before running aap-casc.
+  when: aap_platform_aap_cr.resources | length == 0
+
+- name: Set AAP gateway connection facts from operator status
+  ansible.builtin.set_fact:
+    aap_platform_gateway_url: "{{ aap_platform_aap_cr.resources[0].status.URL }}"
+    aap_platform_admin_user: "{{ aap_platform_aap_cr.resources[0].status.adminUser }}"
+    aap_platform_admin_password_secret: "{{ aap_platform_aap_cr.resources[0].status.adminPasswordSecret }}"
+  no_log: true
+
+- name: Get AAP admin password from cluster secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_platform_admin_password_secret }}"
+    namespace: "{{ aap_casc_namespace }}"
+  register: aap_platform_admin_secret
+  no_log: true
+
+- name: Set AAP admin password fact
+  ansible.builtin.set_fact:
+    aap_platform_admin_password: "{{ aap_platform_admin_secret.resources[0].data.password | b64decode }}"
+  no_log: true
+  when: aap_platform_admin_secret.resources | length > 0
+
+- name: Resolve Automation Hub offline token
+  ansible.builtin.set_fact:
+    aap_platform_ah_offline_token: >-
+      {{
+        lookup('ansible.builtin.env', 'PUBLIC_AH_OFFLINE_TOKEN', default='')
+        | default(aap_casc_ah_offline_token | default(''), true)
+        | trim
+      }}
+  no_log: true
+
+- name: Fail when Automation Hub offline token is not set
+  ansible.builtin.fail:
+    msg: >-
+      Red Hat Automation Hub offline token is required for AAP CASC credentials.
+      Set aap_casc.public_ah_token in vars.yaml or export PUBLIC_AH_OFFLINE_TOKEN
+      (console.redhat.com offline token) and re-run.
+  when: aap_platform_ah_offline_token | length == 0
+
+- name: Fail when OpenShift connection extra vars are missing
+  ansible.builtin.fail:
+    msg: >-
+      ocp_host and api_token are required for AAP CASC. Pass them at runtime, for example:
+      -e ocp_host=<cluster-domain> -e api_token=<openshift-token>
+  when: ocp_host is not defined or api_token is not defined
+
+- name: Discover OpenShift cluster connection facts from install extra vars
+  ansible.builtin.set_fact:
+    aap_platform_openshift_cluster_domain: "{{ ocp_host }}"
+    aap_platform_openshift_api_server: "https://api.{{ ocp_host }}:6443"
+    aap_platform_openshift_token: "{{ api_token }}"
+    aap_platform_openshift_user: kube:admin
+  no_log: true
+
+- name: Get OpenShift GitOps admin password from cluster secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: openshift-gitops-cluster
+    namespace: openshift-gitops
+  register: aap_platform_gitops_secret
+  no_log: true
+
+- name: Set OpenShift GitOps admin password fact
+  ansible.builtin.set_fact:
+    aap_platform_gitops_password: >-
+      {{ aap_platform_gitops_secret.resources[0].data['admin.password'] | b64decode }}
+  no_log: true
+  when: aap_platform_gitops_secret.resources | default([]) | length > 0
+
+- name: Default OpenShift GitOps admin password when secret is missing
+  ansible.builtin.set_fact:
+    aap_platform_gitops_password: ""
+  when: aap_platform_gitops_password is not defined
+
+- name: Set service URL facts from ecosystem vars
+  ansible.builtin.set_fact:
+    aap_platform_gitea_url: "{{ gitea.root_url | regex_replace('/$', '') }}"
+    aap_platform_gitea_username: "{{ gitea.admin_user }}"
+    aap_platform_gitea_password: "{{ gitea.admin_password }}"
+    aap_platform_itsm_url: "http://itsm-app.{{ itsm.namespace }}.svc:8000"
+    aap_platform_itsm_username: "{{ itsm.bootstrap_admin_user }}"
+    aap_platform_itsm_password: "{{ itsm.bootstrap_admin_password }}"
+    aap_platform_itsm_mcp_token: "{{ itsm.mcp_token }}"
+    aap_platform_chat_url: "http://chat.{{ chat.namespace }}.svc:8080"
+    aap_platform_chat_username: "{{ itsm.bootstrap_admin_user }}"
+    aap_platform_chat_password: "{{ itsm.bootstrap_admin_password }}"
+    aap_platform_gitops_url: "https://openshift-gitops-server-openshift-gitops.apps.{{ ocp_host }}"
+    aap_platform_kafka_bootstrap: >-
+      {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
+    aap_platform_kafka_topic_alertmanager: aiops.alertmanager
+    aap_platform_kafka_topic_itsm: aiops.itsm
+    aap_platform_eda_url: "http://{{ aap_casc_instance_name }}-eda-api.{{ aap_casc_namespace }}.svc:8000"
+  no_log: true
+
+- name: Publish unified platform facts for downstream roles
+  ansible.builtin.set_fact:
+    aap_platform:
+      openshift:
+        api_server: "{{ aap_platform_openshift_api_server }}"
+        token: "{{ aap_platform_openshift_token }}"
+        user: "{{ aap_platform_openshift_user }}"
+        cluster_domain: "{{ aap_platform_openshift_cluster_domain }}"
+      aap:
+        instance_name: "{{ aap_casc_instance_name }}"
+        namespace: "{{ aap_casc_namespace }}"
+        gateway_url: "{{ aap_platform_gateway_url }}"
+        controller_url: "{{ aap_platform_gateway_url }}"
+        eda_url: "{{ aap_platform_eda_url }}"
+        username: "{{ aap_platform_admin_user }}"
+        password: "{{ aap_platform_admin_password }}"
+        organization: "{{ aap_casc_organization }}"
+      gitops:
+        url: "{{ aap_platform_gitops_url }}"
+        namespace: openshift-gitops
+        username: admin
+        password: "{{ aap_platform_gitops_password }}"
+      itsm_app:
+        url: "{{ aap_platform_itsm_url }}"
+        api_base_url: "{{ aap_platform_itsm_url }}/api/v1"
+        username: "{{ aap_platform_itsm_username }}"
+        password: "{{ aap_platform_itsm_password }}"
+        mcp_token: "{{ aap_platform_itsm_mcp_token }}"
+      chat_app:
+        url: "{{ aap_platform_chat_url }}"
+        api_base_url: "{{ aap_platform_chat_url }}/api/v1"
+        username: "{{ aap_platform_chat_username }}"
+        password: "{{ aap_platform_chat_password }}"
+      gitea:
+        url: "{{ aap_platform_gitea_url }}"
+        username: "{{ aap_platform_gitea_username }}"
+        password: "{{ aap_platform_gitea_password }}"
+      virtualization:
+        operator_namespace: "{{ openshift_virt_operator_namespace }}"
+        vm_namespace: "{{ aap_casc_aiops_demo_namespace }}"
+        ssh_secret_name: authorized-keys
+        username: fedora
+        ssh_privatekey: "{{ aap_platform_vm_ssh_privatekey | default('') }}"
+        ssh_publickey: "{{ aap_platform_vm_ssh_publickey | default('') }}"
+      observability:
+        kafka_bootstrap: "{{ aap_platform_kafka_bootstrap }}"
+        kafka_topic_alertmanager: "{{ aap_platform_kafka_topic_alertmanager }}"
+        kafka_topic_itsm: "{{ aap_platform_kafka_topic_itsm }}"
+      eda: "{{ aap_platform_eda_facts | default({}) }}"
+    cacheable: true
+  no_log: true
+
+- name: Display platform facts summary
+  ansible.builtin.debug:
+    msg:
+      - "AAP Gateway: {{ aap_platform.aap.gateway_url }}"
+      - "Gitea: {{ aap_platform.gitea.url }}"
+      - "ITSM: {{ aap_platform.itsm_app.url }}"
+      - "Kafka: {{ aap_platform.observability.kafka_bootstrap }}"

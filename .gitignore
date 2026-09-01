@@ -1,3 +1,25 @@
 ansible-navigator/context/*
 
+# Local configuration with secrets (see README for template)
 vars.yaml
+vars.local.yaml
+*.local.yaml
+# Rendered or local env overrides (tracked components/*/.env are Jinja templates)
+.env.local
+*.env.local
+
+# Keys, certs, and kubeconfig
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+**/id_rsa
+**/id_ed25519*
+kubeconfig
+kubeconfig.*
+*kubeconfig*
+#Other files
+
+ansible-navigator.log
