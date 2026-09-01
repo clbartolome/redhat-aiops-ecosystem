@@ -34,7 +34,7 @@ data:
         {
           "type": "table",
           "title": "Virtual Machine Fleet Status",
-          "description": "Consolidated view of CPU, memory, disk, IOPS, network, latency, service availability and active alerts per VM.",
+          "description": "Per-VM resource metrics and HTTPD service reachability (blackbox HTTP probe).",
           "id": 1,
           "gridPos": {
             "h": 5,
@@ -54,15 +54,6 @@ data:
                   "type": "auto"
                 },
                 "inspect": false
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": [
@@ -74,7 +65,7 @@ data:
                 "properties": [
                   {
                     "id": "custom.width",
-                    "value": 150
+                    "value": 140
                   },
                   {
                     "id": "custom.align",
@@ -85,43 +76,53 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Status"
+                  "options": "Service"
                 },
                 "properties": [
                   {
                     "id": "mappings",
                     "value": [
                       {
-                        "type": "value",
+                        "type": "range",
                         "options": {
-                          "0": {
-                            "color": "red",
-                            "text": "\ud83d\udd34 Critical",
+                          "from": 0.5,
+                          "to": 1.5,
+                          "result": {
+                            "color": "green",
+                            "text": "Up",
                             "index": 0
                           }
                         }
                       },
                       {
-                        "type": "value",
+                        "type": "range",
                         "options": {
-                          "1": {
-                            "color": "green",
-                            "text": "\ud83d\udfe2 OK",
+                          "from": 1.5,
+                          "to": 2.5,
+                          "result": {
+                            "color": "red",
+                            "text": "Down",
                             "index": 1
                           }
                         }
                       },
                       {
-                        "type": "value",
+                        "type": "range",
                         "options": {
-                          "2": {
-                            "color": "#EAB839",
-                            "text": "\ud83d\udfe1 Warning",
+                          "from": 2.5,
+                          "to": 3.5,
+                          "result": {
+                            "color": "#8F8F8F",
+                            "text": "No probe",
                             "index": 2
                           }
                         }
                       }
                     ]
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
                   },
                   {
                     "id": "custom.cellOptions",
@@ -378,104 +379,6 @@ data:
                     }
                   }
                 ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Service"
-                },
-                "properties": [
-                  {
-                    "id": "mappings",
-                    "value": [
-                      {
-                        "type": "value",
-                        "options": {
-                          "0": {
-                            "color": "red",
-                            "text": "\ud83d\udd34 Down",
-                            "index": 0
-                          }
-                        }
-                      },
-                      {
-                        "type": "value",
-                        "options": {
-                          "1": {
-                            "color": "green",
-                            "text": "\ud83d\udfe2 Up",
-                            "index": 1
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "color-background"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Active Alerts"
-                },
-                "properties": [
-                  {
-                    "id": "decimals",
-                    "value": 0
-                  },
-                  {
-                    "id": "mappings",
-                    "value": [
-                      {
-                        "type": "range",
-                        "options": {
-                          "from": 0,
-                          "to": 0.5,
-                          "result": {
-                            "color": "green",
-                            "text": "\ud83d\udfe2 0",
-                            "index": 0
-                          }
-                        }
-                      },
-                      {
-                        "type": "range",
-                        "options": {
-                          "from": 0.5,
-                          "to": 1.5,
-                          "result": {
-                            "color": "#EAB839",
-                            "text": "\ud83d\udfe1",
-                            "index": 1
-                          }
-                        }
-                      },
-                      {
-                        "type": "range",
-                        "options": {
-                          "from": 1.5,
-                          "to": 1000,
-                          "result": {
-                            "color": "red",
-                            "text": "\ud83d\udd34",
-                            "index": 2
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "color-background"
-                    }
-                  }
-                ]
               }
             ]
           },
@@ -498,6 +401,12 @@ data:
           },
           "pluginVersion": "11.3.0",
           "targets": [
+            {
+              "refId": "SERVICE",
+              "expr": "(label_replace(2 - probe_success{job=\"apache-http\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\")) or (count by (name) (kubevirt_vmi_memory_available_bytes{namespace=\"{{ aap_casc.aiops_demo_namespace }}\"} unless on (name) label_replace(probe_success{job=\"apache-http\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\")) * 0 + 3)",
+              "format": "table",
+              "instant": true
+            },
             {
               "refId": "CPU",
               "expr": "100 * sum by (name) (rate(kubevirt_vmi_cpu_usage_seconds_total{namespace=\"{{ aap_casc.aiops_demo_namespace }}\"}[5m])) / sum by (name) (kubevirt_vmi_vcpu_seconds_total{namespace=\"{{ aap_casc.aiops_demo_namespace }}\"})",
@@ -533,24 +442,6 @@ data:
               "expr": "label_replace(probe_duration_seconds{job=\"apache-http\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\")",
               "format": "table",
               "instant": true
-            },
-            {
-              "refId": "PROBE",
-              "expr": "label_replace(probe_success{job=\"apache-http\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\")",
-              "format": "table",
-              "instant": true
-            },
-            {
-              "refId": "ALERTS",
-              "expr": "label_replace(sum by (vm_name) (ALERTS{alertstate=\"firing\", vm_name!=\"\"}), \"name\", \"$1\", \"vm_name\", \"(.*)\")",
-              "format": "table",
-              "instant": true
-            },
-            {
-              "refId": "STATUS",
-              "expr": "((count by (name) (label_replace(ALERTS{alertstate=\"firing\",vm_name!=\"\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\")) > bool 0) * 0) or ((label_replace(probe_success{job=\"apache-http\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\") == bool 0) * 2) or ((label_replace(probe_success{job=\"apache-http\"}, \"name\", \"$1\", \"vm_name\", \"(.*)\") == bool 1) * 1) or ((group by (name) (kubevirt_vmi_memory_available_bytes{namespace=\"{{ aap_casc.aiops_demo_namespace }}\"})) * 0 + 1)",
-              "format": "table",
-              "instant": true
             }
           ],
           "transformations": [
@@ -572,8 +463,6 @@ data:
                   "Time 5": true,
                   "Time 6": true,
                   "Time 7": true,
-                  "Time 8": true,
-                  "Time 9": true,
                   "__name__": true,
                   "container": true,
                   "endpoint": true,
@@ -587,32 +476,27 @@ data:
                   "vm_name": true,
                   "mount_point": true,
                   "disk_name": true,
-                  "kubernetes_vmi_label_kubevirt_io_nodeName": true,
-                  "Value #VM": true
+                  "kubernetes_vmi_label_kubevirt_io_nodeName": true
                 },
                 "renameByName": {
                   "name": "VM",
+                  "Value #SERVICE": "Service",
                   "Value #CPU": "CPU %",
                   "Value #MEM": "Memory %",
                   "Value #DISK": "Disk %",
                   "Value #IOPS": "IOPS",
                   "Value #NET": "Network",
-                  "Value #LAT": "Latency",
-                  "Value #PROBE": "Service",
-                  "Value #ALERTS": "Active Alerts",
-                  "Value #STATUS": "Status"
+                  "Value #LAT": "Latency"
                 },
                 "indexByName": {
                   "VM": 0,
-                  "Status": 1,
+                  "Service": 1,
                   "CPU %": 2,
                   "Memory %": 3,
                   "Disk %": 4,
                   "IOPS": 5,
                   "Network": 6,
-                  "Latency": 7,
-                  "Service": 8,
-                  "Active Alerts": 9
+                  "Latency": 7
                 }
               }
             }

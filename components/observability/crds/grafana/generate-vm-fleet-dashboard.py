@@ -56,21 +56,10 @@ THRESHOLDS_UP = {
     ],
 }
 
-STATUS_MAPPINGS = [
-    {"type": "value", "options": {"0": {"color": "red", "text": "🔴 Critical", "index": 0}}},
-    {"type": "value", "options": {"1": {"color": "green", "text": "🟢 OK", "index": 1}}},
-    {"type": "value", "options": {"2": {"color": "#EAB839", "text": "🟡 Warning", "index": 2}}},
-]
-
 SERVICE_MAPPINGS = [
-    {"type": "value", "options": {"0": {"color": "red", "text": "🔴 Down", "index": 0}}},
-    {"type": "value", "options": {"1": {"color": "green", "text": "🟢 Up", "index": 1}}},
-]
-
-ALERT_MAPPINGS = [
-    {"type": "range", "options": {"from": 0, "to": 0.5, "result": {"color": "green", "text": "🟢 0", "index": 0}}},
-    {"type": "range", "options": {"from": 0.5, "to": 1.5, "result": {"color": "#EAB839", "text": "🟡", "index": 1}}},
-    {"type": "range", "options": {"from": 1.5, "to": 1000, "result": {"color": "red", "text": "🔴", "index": 2}}},
+    {"type": "range", "options": {"from": 0.5, "to": 1.5, "result": {"color": "green", "text": "Up", "index": 0}}},
+    {"type": "range", "options": {"from": 1.5, "to": 2.5, "result": {"color": "red", "text": "Down", "index": 1}}},
+    {"type": "range", "options": {"from": 2.5, "to": 3.5, "result": {"color": "#8F8F8F", "text": "No probe", "index": 2}}},
 ]
 
 
@@ -78,35 +67,36 @@ def cell_bg() -> dict:
     return {"type": "color-background"}
 
 
-def status_expr() -> str:
-    return (
-        f'((count by (name) (label_replace(ALERTS{{alertstate="firing",vm_name!=""}}, "name", "$1", "vm_name", "(.*)")) > bool 0) * 0) '
-        f'or ((label_replace(probe_success{{job="apache-http"}}, "name", "$1", "vm_name", "(.*)") == bool 0) * 2) '
-        f'or ((label_replace(probe_success{{job="apache-http"}}, "name", "$1", "vm_name", "(.*)") == bool 1) * 1) '
-        f'or ((group by (name) (kubevirt_vmi_memory_available_bytes{{namespace="{NS}"}})) * 0 + 1)'
+def service_expr() -> str:
+    # Encode as 1=up, 2=down so Grafana value mappings never rely on numeric zero.
+    probe = 'label_replace(probe_success{job="apache-http"}, "name", "$1", "vm_name", "(.*)")'
+    encoded = 'label_replace(2 - probe_success{job="apache-http"}, "name", "$1", "vm_name", "(.*)")'
+    no_probe = (
+        f'count by (name) (kubevirt_vmi_memory_available_bytes{{namespace="{NS}"}} unless on (name) {probe}) * 0 + 3'
     )
+    return f"({encoded}) or ({no_probe})"
 
 
 def vm_table_panel(*, grid_y: int, grid_h: int) -> dict:
     return {
         "type": "table",
         "title": "Virtual Machine Fleet Status",
-        "description": "Consolidated view of CPU, memory, disk, IOPS, network, latency, service availability and active alerts per VM.",
+        "description": "Per-VM resource metrics and HTTPD service reachability (blackbox HTTP probe).",
         "id": 1,
         "gridPos": {"h": grid_h, "w": 24, "x": 0, "y": grid_y},
         "datasource": {"type": "prometheus", "uid": "prometheus"},
         "fieldConfig": {
             "defaults": {
                 "custom": {"align": "center", "cellOptions": {"type": "auto"}, "inspect": False},
-                "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}]},
             },
             "overrides": [
                 {"matcher": {"id": "byName", "options": "VM"}, "properties": [
-                    {"id": "custom.width", "value": 150},
+                    {"id": "custom.width", "value": 140},
                     {"id": "custom.align", "value": "left"},
                 ]},
-                {"matcher": {"id": "byName", "options": "Status"}, "properties": [
-                    {"id": "mappings", "value": STATUS_MAPPINGS},
+                {"matcher": {"id": "byName", "options": "Service"}, "properties": [
+                    {"id": "mappings", "value": SERVICE_MAPPINGS},
+                    {"id": "custom.width", "value": 110},
                     {"id": "custom.cellOptions", "value": cell_bg()},
                 ]},
                 {"matcher": {"id": "byName", "options": "CPU %"}, "properties": [
@@ -144,15 +134,6 @@ def vm_table_panel(*, grid_y: int, grid_h: int) -> dict:
                     {"id": "thresholds", "value": THRESHOLDS_LATENCY},
                     {"id": "custom.cellOptions", "value": cell_bg()},
                 ]},
-                {"matcher": {"id": "byName", "options": "Service"}, "properties": [
-                    {"id": "mappings", "value": SERVICE_MAPPINGS},
-                    {"id": "custom.cellOptions", "value": cell_bg()},
-                ]},
-                {"matcher": {"id": "byName", "options": "Active Alerts"}, "properties": [
-                    {"id": "decimals", "value": 0},
-                    {"id": "mappings", "value": ALERT_MAPPINGS},
-                    {"id": "custom.cellOptions", "value": cell_bg()},
-                ]},
             ],
         },
         "options": {
@@ -163,15 +144,13 @@ def vm_table_panel(*, grid_y: int, grid_h: int) -> dict:
         },
         "pluginVersion": "11.3.0",
         "targets": [
+            {"refId": "SERVICE", "expr": service_expr(), "format": "table", "instant": True},
             {"refId": "CPU", "expr": f'100 * sum by (name) (rate(kubevirt_vmi_cpu_usage_seconds_total{{namespace="{NS}"}}[5m])) / sum by (name) (kubevirt_vmi_vcpu_seconds_total{{namespace="{NS}"}})', "format": "table", "instant": True},
             {"refId": "MEM", "expr": f'100 * sum by (name) (kubevirt_vmi_memory_domain_bytes{{namespace="{NS}"}} - kubevirt_vmi_memory_available_bytes{{namespace="{NS}"}}) / sum by (name) (kubevirt_vmi_memory_domain_bytes{{namespace="{NS}"}})', "format": "table", "instant": True},
             {"refId": "DISK", "expr": f'100 * max by (name) (kubevirt_vmi_filesystem_used_bytes{{namespace="{NS}",mount_point="/"}} / kubevirt_vmi_filesystem_capacity_bytes{{namespace="{NS}",mount_point="/"}})', "format": "table", "instant": True},
             {"refId": "IOPS", "expr": f'sum by (name) (rate(kubevirt_vmi_storage_iops_read_total{{namespace="{NS}"}}[5m]) + rate(kubevirt_vmi_storage_iops_write_total{{namespace="{NS}"}}[5m]))', "format": "table", "instant": True},
             {"refId": "NET", "expr": f'sum by (name) (rate(kubevirt_vmi_network_traffic_bytes_total{{namespace="{NS}"}}[5m]))', "format": "table", "instant": True},
             {"refId": "LAT", "expr": 'label_replace(probe_duration_seconds{job="apache-http"}, "name", "$1", "vm_name", "(.*)")', "format": "table", "instant": True},
-            {"refId": "PROBE", "expr": 'label_replace(probe_success{job="apache-http"}, "name", "$1", "vm_name", "(.*)")', "format": "table", "instant": True},
-            {"refId": "ALERTS", "expr": 'label_replace(sum by (vm_name) (ALERTS{alertstate="firing", vm_name!=""}), "name", "$1", "vm_name", "(.*)")', "format": "table", "instant": True},
-            {"refId": "STATUS", "expr": status_expr(), "format": "table", "instant": True},
         ],
         "transformations": [
             {"id": "seriesToColumns", "options": {"byField": "name"}},
@@ -181,27 +160,25 @@ def vm_table_panel(*, grid_y: int, grid_h: int) -> dict:
                     "excludeByName": {
                         "Time": True,
                         "Time 1": True, "Time 2": True, "Time 3": True, "Time 4": True,
-                        "Time 5": True, "Time 6": True, "Time 7": True, "Time 8": True, "Time 9": True,
+                        "Time 5": True, "Time 6": True, "Time 7": True,
                         "__name__": True, "container": True, "endpoint": True, "instance": True,
                         "job": True, "namespace": True, "node": True, "pod": True, "prometheus": True,
                         "service": True, "vm_name": True, "mount_point": True, "disk_name": True,
-                        "kubernetes_vmi_label_kubevirt_io_nodeName": True, "Value #VM": True,
+                        "kubernetes_vmi_label_kubevirt_io_nodeName": True,
                     },
                     "renameByName": {
                         "name": "VM",
+                        "Value #SERVICE": "Service",
                         "Value #CPU": "CPU %",
                         "Value #MEM": "Memory %",
                         "Value #DISK": "Disk %",
                         "Value #IOPS": "IOPS",
                         "Value #NET": "Network",
                         "Value #LAT": "Latency",
-                        "Value #PROBE": "Service",
-                        "Value #ALERTS": "Active Alerts",
-                        "Value #STATUS": "Status",
                     },
                     "indexByName": {
-                        "VM": 0, "Status": 1, "CPU %": 2, "Memory %": 3, "Disk %": 4,
-                        "IOPS": 5, "Network": 6, "Latency": 7, "Service": 8, "Active Alerts": 9,
+                        "VM": 0, "Service": 1, "CPU %": 2, "Memory %": 3, "Disk %": 4,
+                        "IOPS": 5, "Network": 6, "Latency": 7,
                     },
                 },
             },

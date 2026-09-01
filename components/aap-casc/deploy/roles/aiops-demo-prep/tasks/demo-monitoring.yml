@@ -16,7 +16,6 @@
     api_version: monitoring.coreos.com/v1
     kind: Probe
     namespace: "{{ aiops_demo_namespace }}"
-    label_selector: app.kubernetes.io/part-of=observability
   register: legacy_aiops_demo_probes
 
   kubernetes.core.k8s:

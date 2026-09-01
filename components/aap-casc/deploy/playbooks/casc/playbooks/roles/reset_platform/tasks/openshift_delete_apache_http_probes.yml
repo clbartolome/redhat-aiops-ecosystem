@@ -11,7 +11,7 @@
     validate_certs: false
     api_version: monitoring.coreos.com/v1
     kind: Probe
-    namespace: "{{ openshift_apache_monitoring_namespace | default(vm_namespace | default('aiops-demo')) }}"
+    namespace: "{{ openshift_apache_monitoring_namespace | default(observability.namespace | default('observability')) }}"
   register: reset_apache_http_probes
 
 - name: Build Apache HTTP probes to remove

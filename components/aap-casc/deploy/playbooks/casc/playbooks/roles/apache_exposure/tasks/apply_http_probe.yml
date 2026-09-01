@@ -2,6 +2,17 @@
 - name: Load OpenShift API credentials for HTTP Probe apply
   ansible.builtin.include_tasks: ../common/tasks/load_openshift_credential.yml
 
+- name: Remove misplaced HTTP Probe from VM namespace
+  kubernetes.core.k8s:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    state: absent
+    api_version: monitoring.coreos.com/v1
+    kind: Probe
+    name: "{{ apache_exposure_vm_name }}-http-probe"
+    namespace: "{{ vm_namespace | default('aiops-demo') }}"
+
 - name: Apply HTTP Probe for Apache Service monitoring outside GitOps
   kubernetes.core.k8s:
     host: "{{ openshift_credential_host | default(omit) }}"
