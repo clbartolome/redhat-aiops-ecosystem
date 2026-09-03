@@ -22,4 +22,6 @@ kubeconfig.*
 *kubeconfig*
 #Other files
 
+**/install-artifact*.json
+
 ansible-navigator.log
