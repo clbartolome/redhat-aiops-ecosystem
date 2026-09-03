@@ -1,0 +1,65 @@
+---
+- name: Apply faster Apache alert timing
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../../../../vars.yaml
+  tasks:
+    - name: Load AAP CASC group variables
+      ansible.builtin.include_vars:
+        dir: "{{ playbook_dir }}/../../group_vars/all"
+        extensions:
+          - yml
+
+    - name: Discover platform connection facts
+      ansible.builtin.include_role:
+        name: aap-platform-facts
+
+    - name: Apply AlertmanagerConfig with reduced group wait
+      kubernetes.core.k8s:
+        state: present
+        definition: >-
+          {{
+            lookup(
+              'template',
+              playbook_dir + '/../../../../observability/crds/prometheus/30-alertmanager-config.yaml'
+            ) | from_yaml
+          }}
+
+    - name: Re-apply Apache PrometheusRule with faster evaluation
+      ansible.builtin.include_role:
+        name: aiops-demo-prep
+        tasks_from: demo-monitoring.yml
+      vars:
+        playbook_dir: "{{ playbook_dir }}/playbooks/casc"
+
+    - name: List Apache HTTP probes in observability namespace
+      kubernetes.core.k8s_info:
+        api_version: monitoring.coreos.com/v1
+        kind: Probe
+        namespace: observability
+        label_selectors:
+          - app.kubernetes.io/part-of=observability
+      register: observability_probes
+
+    - name: Patch existing Apache HTTP Probe intervals to 10s
+      kubernetes.core.k8s:
+        state: patched
+        api_version: monitoring.coreos.com/v1
+        kind: Probe
+        namespace: observability
+        name: "{{ item.metadata.name }}"
+        definition:
+          spec:
+            interval: 10s
+      loop: "{{ observability_probes.resources | default([]) }}"
+      when: observability_probes.resources | default([]) | length > 0
+      loop_control:
+        label: "{{ item.metadata.name }}"
+
+    - name: Display applied Apache alert timing
+      ansible.builtin.debug:
+        msg:
+          - "Probe interval: 10s"
+          - "PrometheusRule for: 10s"
+          - "Alertmanager groupWait: 0s, groupInterval: 10s"

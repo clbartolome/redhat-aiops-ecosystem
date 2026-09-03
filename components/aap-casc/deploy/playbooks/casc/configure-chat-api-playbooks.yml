@@ -1,0 +1,24 @@
+---
+- name: Refresh AAP job templates for chat 1.5 API
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../../../../vars.yaml
+  tasks:
+    - name: Load AAP CASC group variables
+      ansible.builtin.include_vars:
+        dir: "{{ playbook_dir }}/../../group_vars/all"
+        extensions:
+          - yml
+
+    - name: Discover platform connection facts
+      ansible.builtin.include_role:
+        name: aap-platform-facts
+
+    - name: Ensure VM SSH keys are available for AAP CASC preflight
+      ansible.builtin.include_role:
+        name: aiops-demo-prep
+
+    - name: Refresh Apache troubleshoot job templates
+      ansible.builtin.include_role:
+        name: aap-apache-troubleshoot-pipeline

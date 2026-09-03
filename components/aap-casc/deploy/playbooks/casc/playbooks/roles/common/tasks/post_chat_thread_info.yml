@@ -1,0 +1,43 @@
+---
+- name: Resolve chat base URL for thread info posts
+  ansible.builtin.set_fact:
+    chat_thread_info_base_url: >-
+      {{
+        chat_app_url | default(aap_platform.chat_app.url | default('', true), true)
+        | regex_replace('/$', '')
+      }}
+
+- name: Resolve agent thread id for chat thread info post
+  ansible.builtin.set_fact:
+    chat_agent_thread_id: >-
+      {{ (chat_thread_id | default(thread_id | default('', true), true)) | string | trim }}
+
+- name: Fail when chat thread info base URL is unavailable
+  ansible.builtin.fail:
+    msg: >-
+      Chat URL is missing. Attach the Chat App credential to the job template
+      or ensure platform facts include chat_app.url.
+  when: chat_thread_info_base_url | default('') | string | trim | length == 0
+
+- name: Fail when agent thread id is missing for chat thread info post
+  ansible.builtin.fail:
+    msg: >-
+      chat_thread_id (or thread_id from AAP MCP) is required to post a threaded chat update.
+  when: chat_agent_thread_id | default('') | string | trim | length == 0
+
+- name: Fail when chat thread info message is empty
+  ansible.builtin.fail:
+    msg: chat_thread_info_message is required to post a threaded chat update.
+  when: chat_thread_info_message | default('') | string | trim | length == 0
+
+- name: Post automation message to chat agent thread
+  ansible.builtin.uri:
+    url: >-
+      {{ chat_thread_info_base_url }}/threads/{{
+      chat_agent_thread_id | urlencode }}/info
+    method: POST
+    body_format: json
+    body:
+      message: "{{ chat_thread_info_message | string | trim }}"
+    validate_certs: false
+    status_code: [201]

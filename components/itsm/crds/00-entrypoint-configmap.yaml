@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: itsm-entrypoint
+  labels:
+    app: itsm-app
+data:
+  session_max_age.py: |
+{{ lookup('file', playbook_dir ~ '/components/itsm/files/session_max_age.py') | indent(4, first=True) }}
+  sync_passwords.py: |
+{{ lookup('file', playbook_dir ~ '/components/itsm/files/sync_passwords.py') | indent(4, first=True) }}
+  observability_webhook.py: |
+{{ lookup('file', playbook_dir ~ '/components/itsm/files/observability_webhook.py') | indent(4, first=True) }}

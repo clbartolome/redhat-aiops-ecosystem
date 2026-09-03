@@ -1,0 +1,122 @@
+---
+- name: Wait for OpenShift GitOps namespace
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ gitops.namespace }}"
+  register: openshift_gitops_namespace
+  until: openshift_gitops_namespace.resources | length > 0
+  retries: 30
+  delay: 10
+
+- name: Wait for OpenShift GitOps server Deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: openshift-gitops-server
+    namespace: "{{ gitops.namespace }}"
+  register: openshift_gitops_server_deployment
+  until: openshift_gitops_server_deployment.resources | length > 0
+  retries: 30
+  delay: 10
+
+- name: Get OpenShift GitOps server pod
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ gitops.namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name={{ gitops.instance_name }}-server
+  register: openshift_gitops_server_pods
+
+- name: Fail when OpenShift GitOps server pod is missing
+  ansible.builtin.fail:
+    msg: >-
+      No OpenShift GitOps server pod found in namespace {{ gitops.namespace }}.
+      Install the OpenShift GitOps operator before running install.
+  when: openshift_gitops_server_pods.resources | length == 0
+
+- name: Generate Argo CD admin password bcrypt hash
+  kubernetes.core.k8s_exec:
+    namespace: "{{ gitops.namespace }}"
+    pod: "{{ openshift_gitops_server_pods.resources[0].metadata.name }}"
+    command: >-
+      argocd account bcrypt --password {{ gitops.admin_password | quote }}
+  register: openshift_gitops_admin_bcrypt
+  changed_when: false
+  no_log: true
+
+- name: Set OpenShift GitOps cluster admin password secret
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: openshift-gitops-cluster
+        namespace: "{{ gitops.namespace }}"
+      stringData:
+        admin.password: "{{ gitops.admin_password }}"
+  no_log: true
+
+- name: Set Argo CD admin password hash secret
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: argocd-secret
+        namespace: "{{ gitops.namespace }}"
+      stringData:
+        admin.password: "{{ openshift_gitops_admin_bcrypt.stdout | trim }}"
+  no_log: true
+
+- name: Configure Argo CD session duration
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        namespace: "{{ gitops.namespace }}"
+      data:
+        users.session.duration: "{{ gitops.session_duration }}"
+        users.session.expiry: "0"
+
+- name: Restart OpenShift GitOps server after credential update
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    api_version: apps/v1
+    kind: Deployment
+    name: openshift-gitops-server
+    namespace: "{{ gitops.namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              redhat-aiops-ecosystem/restartedAt: "{{ lookup('pipe', 'date -Iseconds') }}"
+
+- name: Wait for OpenShift GitOps server rollout
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: openshift-gitops-server
+    namespace: "{{ gitops.namespace }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+
+- name: Show OpenShift GitOps connection details
+  ansible.builtin.debug:
+    msg:
+      - "Argo CD URL: https://{{ gitops.instance_name }}-server-{{ gitops.namespace }}.apps.{{ ocp_host }}"
+      - "Argo CD admin user: {{ gitops.admin_user }}"
