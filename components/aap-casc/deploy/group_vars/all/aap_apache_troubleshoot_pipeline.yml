@@ -21,9 +21,7 @@ aap_apache_troubleshoot_incident_extra_vars:
 aap_apache_troubleshoot_survey_extra_vars:
   vm_name: ""
   itsm_incident_ref: ""
-  chat_webhook_url: ""
-
-aap_apache_troubleshoot_chat_webhook_url: ""
+  thread_id: ""
 
 aap_apache_troubleshoot_pipeline_job_extra_vars_create: "{{ aap_apache_troubleshoot_incident_extra_vars }}"
 aap_apache_troubleshoot_pipeline_job_extra_vars_troubleshoot: "{{ aap_apache_troubleshoot_survey_extra_vars }}"

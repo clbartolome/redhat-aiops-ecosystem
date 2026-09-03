@@ -15,3 +15,7 @@ aiops_demo_vm_udn_name: aiops-vm-network
 aiops_demo_vm_udn_ready_retries: 30
 aiops_demo_vm_udn_ready_delay: 10
 aiops_demo_monitoring_template_dir: "{{ playbook_dir }}/playbooks/templates"
+
+# Apache alert pipeline: target ~30s from probe failure to EDA job launch.
+openshift_apache_monitoring_probe_interval: 10s
+openshift_apache_monitoring_probe_for: 10s

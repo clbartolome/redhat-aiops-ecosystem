@@ -25,6 +25,12 @@ spec:
         - name: itsm-app
           image: "{{ itsm.image }}"
           imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - >-
+              python3 /opt/itsm-entrypoint/session_max_age.py &&
+              exec uvicorn app.main:app --host 0.0.0.0 --port 8000
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -37,6 +43,9 @@ spec:
             - secretRef:
                 name: itsm-config
           volumeMounts:
+            - name: itsm-entrypoint
+              mountPath: /opt/itsm-entrypoint
+              readOnly: true
             - name: sqlite-data
               mountPath: /data
           readinessProbe:
@@ -59,6 +68,10 @@ spec:
               cpu: "500m"
               memory: "512Mi"
       volumes:
+        - name: itsm-entrypoint
+          configMap:
+            name: itsm-entrypoint
+            defaultMode: 0555
         - name: sqlite-data
           persistentVolumeClaim:
             claimName: itsm-data

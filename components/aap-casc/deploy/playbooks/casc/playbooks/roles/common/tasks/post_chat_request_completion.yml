@@ -20,15 +20,11 @@
         )
       }}
 
-- name: Post service request completion as thread reply under request message
-  ansible.builtin.uri:
-    url: "{{ vm_modification_chat_webhook_url }}"
-    method: POST
-    body_format: json
-    body:
-      body: >-
-        [request.complete] {{ itsm_service_request_ref | string | trim }} —
-        {{ vm_modification_chat_summary }}
-      parent_id: "{{ vm_modification_chat_parent_message_id }}"
-    validate_certs: false
-    status_code: [201]
+- name: Post service request completion to chat agent thread
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: post_chat_thread_info.yml
+  vars:
+    chat_thread_info_message: >-
+      [request.complete] {{ itsm_service_request_ref | string | trim }} —
+      {{ vm_modification_chat_summary }}

@@ -20,6 +20,10 @@
       ansible.builtin.include_tasks:
         file: components/aap-eda/install.yaml
 
+    - name: Configure OpenShift GitOps admin credentials and session
+      ansible.builtin.include_tasks:
+        file: components/openshift-gitops/install.yaml
+
     - name: Install ITSM
       ansible.builtin.include_tasks:
         file: components/itsm/install.yaml

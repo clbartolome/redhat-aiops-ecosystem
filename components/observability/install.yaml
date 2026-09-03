@@ -283,6 +283,26 @@
       status: "True"
     wait_timeout: 300
 
+- name: Get grafana pod
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ observability.namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=grafana
+  register: observability_grafana_pods
+
+- name: Reset Grafana admin password to configured value
+  kubernetes.core.k8s_exec:
+    namespace: "{{ observability.namespace }}"
+    pod: "{{ observability_grafana_pods.resources[0].metadata.name }}"
+    container: grafana
+    command: >-
+      grafana-cli admin reset-admin-password
+      {{ observability.grafana.admin_password | quote }}
+  when: observability_grafana_pods.resources | length > 0
+  no_log: true
+
 - name: Show observability connection details
   ansible.builtin.debug:
     msg:

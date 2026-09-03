@@ -12,10 +12,8 @@ aap_itsm_chat_pipeline_playbook_publish: publish_itsm_chat_notification.yml
 aap_itsm_chat_pipeline_job_extra_vars:
   itsm_chat_event: ""
   itsm_chat_public_id: ""
-  itsm_chat_title: ""
-  itsm_chat_severity: ""
-  chat_webhook_url: ""
-
-aap_itsm_chat_pipeline_chat_webhook_url: ""
+  chat_incident_title: ""
+  chat_incident_message: ""
+  chat_incident_severity: ""
 
 aap_itsm_chat_pipeline_credential_chat: Chat App

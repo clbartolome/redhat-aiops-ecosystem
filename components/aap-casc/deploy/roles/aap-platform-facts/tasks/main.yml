@@ -99,7 +99,7 @@
     aap_platform_itsm_username: "{{ itsm.bootstrap_admin_user }}"
     aap_platform_itsm_password: "{{ itsm.bootstrap_admin_password }}"
     aap_platform_itsm_mcp_token: "{{ itsm.mcp_token }}"
-    aap_platform_chat_url: "http://chat.{{ chat.namespace }}.svc:8080"
+    aap_platform_chat_url: "http://chat.{{ chat.namespace }}.svc:5000"
     aap_platform_chat_username: "{{ itsm.bootstrap_admin_user }}"
     aap_platform_chat_password: "{{ itsm.bootstrap_admin_password }}"
     aap_platform_gitops_url: "https://openshift-gitops-server-openshift-gitops.apps.{{ ocp_host }}"
@@ -140,7 +140,6 @@
         mcp_token: "{{ aap_platform_itsm_mcp_token }}"
       chat_app:
         url: "{{ aap_platform_chat_url }}"
-        api_base_url: "{{ aap_platform_chat_url }}/api/v1"
         username: "{{ aap_platform_chat_username }}"
         password: "{{ aap_platform_chat_password }}"
       gitea:

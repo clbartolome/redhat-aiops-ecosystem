@@ -5,6 +5,9 @@
 # Do not commit vars.yaml (it is gitignored).
 # Cluster credentials: pass ocp_host and api_token at runtime with -e, not here.
 
+# Standard demo admin password for Argo CD, ITSM, Grafana, and Gitea.
+demo_admin_password: redhat1q2w3e
+
 kubeconfig:
   ocp_domain: "{{ ocp_host }}"
   ocp_api_token: "{{ api_token }}"
@@ -35,14 +38,22 @@ aap_eda:
   database_name: eda
   database_owner: eda
 
+gitops:
+  namespace: openshift-gitops
+  instance_name: openshift-gitops
+  admin_user: admin
+  admin_password: "{{ demo_admin_password }}"
+  session_duration: 1h
+
 itsm:
   namespace: itsm-app
   image: quay.io/rhn_support_rafsanch/itsm-app:v2.1
   session_secret: <replace-with-long-random-string>
   mcp_token: <your-itsm-mcp-token>
   bootstrap_admin_user: admin
-  bootstrap_admin_password: <your-bootstrap-admin-password>
-  seed_aiops_password: <your-seed-aiops-password>
+  bootstrap_admin_password: "{{ demo_admin_password }}"
+  seed_aiops_password: "{{ demo_admin_password }}"
+  session_max_age_seconds: 3600
   embedding_base_url: <your-embedding-api-base-url>
   embedding_model: <your-embedding-model>
   embedding_api_key: <your-embedding-api-key>
@@ -57,8 +68,9 @@ gitea:
   postgres_image: quay.io/rhn_support_rafsanch/postgres:16-alpine
   secret_key: <openssl-rand-hex-32>
   admin_user: giteaadmin
-  admin_password: <your-gitea-admin-password>
+  admin_password: "{{ demo_admin_password }}"
   admin_email: admin@example.com
+  session_max_age_seconds: 3600
   postgres_user: gitea
   postgres_password: <your-postgres-password>
   postgres_db: gitea
@@ -112,7 +124,8 @@ observability:
     itsm_password: <your-itsm-webhook-password>
   grafana:
     admin_user: admin
-    admin_password: <your-grafana-admin-password>
+    admin_password: "{{ demo_admin_password }}"
+    session_duration: 1h
     host: "grafana-observability.apps.{{ ocp_host }}"
 
 aap_casc:

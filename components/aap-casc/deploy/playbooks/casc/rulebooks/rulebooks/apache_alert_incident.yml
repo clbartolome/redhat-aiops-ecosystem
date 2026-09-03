@@ -19,7 +19,15 @@
           organization: AIOps
           job_args:
             extra_vars:
-              vm_name: "{{ event.body.commonLabels.vm_name | default('') }}"
-              alertname: "{{ event.body.commonLabels.alertname | default('') }}"
-              probe_instance: "{{ event.body.commonLabels.instance | default('') }}"
-              alert_summary: "{{ event.body.commonAnnotations.summary | default('') }}"
+              vm_name: >-
+                {{ event.body.commonLabels.vm_name
+                   | default(event.body.alerts[0].labels.vm_name | default('')) }}
+              alertname: >-
+                {{ event.body.commonLabels.alertname
+                   | default(event.body.alerts[0].labels.alertname | default('')) }}
+              probe_instance: >-
+                {{ event.body.commonLabels.instance
+                   | default(event.body.alerts[0].labels.instance | default('')) }}
+              alert_summary: >-
+                {{ event.body.commonAnnotations.summary
+                   | default(event.body.alerts[0].annotations.summary | default('')) }}

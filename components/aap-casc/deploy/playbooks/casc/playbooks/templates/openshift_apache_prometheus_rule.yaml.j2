@@ -9,14 +9,18 @@ metadata:
 spec:
   groups:
     - name: apache-http.probes
-      interval: {{ openshift_apache_monitoring_probe_interval | default('30s') }}
+      interval: {{ openshift_apache_monitoring_probe_interval | default('10s') }}
       rules:
         - alert: {{ openshift_apache_monitoring_alert_name | default('ApacheApplicationDown') }}
           expr: probe_success{job="{{ openshift_apache_monitoring_probe_job | default('apache-http') }}"} == 0
-          for: {{ openshift_apache_monitoring_probe_for | default('15s') }}
+          for: {{ openshift_apache_monitoring_probe_for | default('10s') }}
           labels:
             severity: critical
             part_of: aiops-demo
+            # AlertmanagerConfig in observability only matches alerts with
+            # namespace=observability (OnNamespace). Probe metrics carry
+            # namespace=aiops-demo; override so webhooks reach OTEL/Kafka/EDA.
+            namespace: {{ openshift_apache_monitoring_namespace | default(observability.namespace | default('observability')) }}
           annotations:
             summary: Apache HTTP probe failed for {{ '{{ $labels.vm_name }}' }}
             description: >-

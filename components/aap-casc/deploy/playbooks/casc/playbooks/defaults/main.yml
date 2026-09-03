@@ -28,7 +28,8 @@ apache_exposure_route_wait_delay: 10
 apache_exposure_service_port: 80
 
 openshift_apache_monitoring_probe_job: apache-http
-openshift_apache_monitoring_probe_interval: 15s
+openshift_apache_monitoring_probe_interval: 10s
+openshift_apache_monitoring_probe_for: 10s
 openshift_apache_monitoring_blackbox_prober: blackbox-exporter.aiops-demo.svc:9115
 openshift_apache_monitoring_namespace: "{{ observability.namespace | default('observability') }}"
 
@@ -36,11 +37,11 @@ itsm_apache_app_asset_type_name: Generic Application
 
 chat_aiops_channel_name: operations
 
-# Post remediation summary as a thread reply under the incident.created chat message.
-# When false, remediation does not post to chat (ITSM comment + close still run).
+# Post remediation summary as a thread info message on the chat agent thread (POST /threads/{thread_id}/info).
+# Requires thread_id from AAP MCP when the job is launched from chat.
 apache_troubleshoot_post_chat_summary: true
 
-# Post VM modification completion as a thread reply under request.submitted chat message.
+# Post VM modification completion as a thread info message on the chat agent thread.
 vm_modification_post_chat_summary: false
 
 openshift_cluster_domain: "apps.{{ ocp_host }}"

@@ -18,24 +18,33 @@
     msg: No itsm-app pod found in namespace {{ itsm.namespace }}.
   when: itsm_observability_pods.resources | length == 0
 
+- name: Wait for itsm-app pod to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    name: "{{ itsm_observability_pods.resources[0].metadata.name }}"
+    namespace: "{{ itsm.namespace }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 180
+
 - name: List configured ITSM outbound webhooks
   kubernetes.core.k8s_exec:
     namespace: "{{ itsm.namespace }}"
     pod: "{{ itsm_observability_pods.resources[0].metadata.name }}"
     container: itsm-app
     command: >-
-      python3 -c {{ itsm_observability_list_webhooks_script | quote }}
-  vars:
-    itsm_observability_list_webhooks_script: >-
-      import json, urllib.request, base64;
-      auth = base64.b64encode({{ (itsm.bootstrap_admin_user ~ ':' ~ itsm.bootstrap_admin_password) | to_json }}.encode()).decode();
-      req = urllib.request.Request(
-        "http://127.0.0.1:8000/api/v1/settings/webhooks",
-        headers={"Authorization": "Basic " + auth},
-      );
-      print(urllib.request.urlopen(req).read().decode())
+      /bin/sh -c
+      'ITSM_SYNC_ADMIN_USER={{ itsm.bootstrap_admin_user | quote }}
+      ITSM_SYNC_ADMIN_PASSWORD={{ itsm.bootstrap_admin_password | quote }}
+      exec python3 /opt/itsm-entrypoint/observability_webhook.py list'
   register: itsm_observability_webhook_lookup_raw
   changed_when: false
+  retries: 5
+  delay: 10
+  until: itsm_observability_webhook_lookup_raw is not failed
   no_log: true
 
 - name: Parse ITSM outbound webhook lookup result
@@ -49,19 +58,11 @@
     pod: "{{ itsm_observability_pods.resources[0].metadata.name }}"
     container: itsm-app
     command: >-
-      python3 -c {{ itsm_observability_create_webhook_script | quote }}
-  vars:
-    itsm_observability_create_webhook_script: >-
-      import json, urllib.request, base64;
-      auth = base64.b64encode({{ (itsm.bootstrap_admin_user ~ ':' ~ itsm.bootstrap_admin_password) | to_json }}.encode()).decode();
-      body = json.dumps({{ {'url': itsm_observability_webhook_url, 'label': 'AIOps observability', 'enabled': True} }}).encode();
-      req = urllib.request.Request(
-        "http://127.0.0.1:8000/api/v1/settings/webhooks",
-        data=body,
-        method="POST",
-        headers={"Authorization": "Basic " + auth, "Content-Type": "application/json"},
-      );
-      print(urllib.request.urlopen(req).read().decode())
+      /bin/sh -c
+      'ITSM_SYNC_ADMIN_USER={{ itsm.bootstrap_admin_user | quote }}
+      ITSM_SYNC_ADMIN_PASSWORD={{ itsm.bootstrap_admin_password | quote }}
+      ITSM_OBSERVABILITY_WEBHOOK_URL={{ itsm_observability_webhook_url | quote }}
+      exec python3 /opt/itsm-entrypoint/observability_webhook.py ensure'
   when: >-
     itsm_observability_webhook_lookup.json
     | selectattr('url', 'equalto', itsm_observability_webhook_url)

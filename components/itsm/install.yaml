@@ -24,6 +24,7 @@
         namespace: "{{ itsm.namespace }}"
       type: Opaque
       stringData: "{{ itsm_config }}"
+  register: itsm_config_secret
 
 - name: Apply itsm manifests
   kubernetes.core.k8s:
@@ -34,6 +35,22 @@
   loop_control:
     label: "{{ item | basename }}"
 
+- name: Restart itsm-app when itsm-config secret changes
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    api_version: apps/v1
+    kind: Deployment
+    name: itsm-app
+    namespace: "{{ itsm.namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              redhat-aiops-ecosystem/itsm-config-restartedAt: "{{ lookup('pipe', 'date -Iseconds') }}"
+  when: itsm_config_secret is changed
+
 - name: Wait for itsm Deployment
   kubernetes.core.k8s:
     state: present
@@ -43,6 +60,10 @@
     namespace: "{{ itsm.namespace }}"
     wait: true
     wait_timeout: 180
+
+- name: Configure ITSM standard admin and aiops passwords
+  ansible.builtin.include_tasks:
+    file: "{{ playbook_dir }}/components/itsm/tasks/configure_standard_passwords.yml"
 
 - name: Configure ITSM outbound webhook for observability pipeline
   ansible.builtin.include_tasks:

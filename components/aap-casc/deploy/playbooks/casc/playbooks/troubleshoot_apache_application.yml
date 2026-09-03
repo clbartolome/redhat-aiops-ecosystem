@@ -52,33 +52,6 @@
         name: common
         tasks_from: refresh_vm_ssh_target.yml
 
-    - name: Resolve chat webhook URL for remediation summary
-      ansible.builtin.set_fact:
-        apache_troubleshoot_chat_base_url: >-
-          {{
-            chat_app_url | default(aap_platform.chat_app.url | default('', true), true)
-            | regex_replace('/$', '')
-          }}
-
-    - name: Build absolute chat webhook URL for remediation summary
-      ansible.builtin.set_fact:
-        apache_troubleshoot_chat_webhook_url: >-
-          {{
-            chat_webhook_url | trim
-            if (
-              chat_webhook_url | default('', true) | trim
-              | regex_search('^https?://')
-            )
-            else (
-              apache_troubleshoot_chat_base_url
-              ~ '/api/v1/webhooks/channels/'
-              ~ (chat_aiops_channel_name | default('operations'))
-              ~ '/messages'
-              if apache_troubleshoot_chat_base_url | string | trim | length > 0
-              else ''
-            )
-          }}
-
     - name: Resolve target host for Apache troubleshooting
       ansible.builtin.include_role:
         name: common
@@ -284,60 +257,32 @@
           Accept: application/json
           Content-Type: application/json
 
-    - name: Resolve incident notification message for threaded chat reply
+    - name: Post remediation summary to chat agent thread
       ansible.builtin.include_role:
         name: common
-        tasks_from: resolve_chat_incident_parent_message.yml
+        tasks_from: post_chat_thread_info.yml
+      vars:
+        chat_thread_info_message: >-
+          [remediation.complete] {{ itsm_incident_ref | string | trim }} on
+          {{ vm_name | string | trim }} — {{ apache_troubleshoot_summary }}
       when:
         - apache_troubleshoot_post_chat_summary | default(true) | bool
-        - apache_troubleshoot_chat_webhook_url | default('') | string | trim | length > 0
-        - apache_troubleshoot_chat_webhook_url | regex_search('^https?://')
-        - apache_troubleshoot_chat_base_url | default('') | string | trim | length > 0
-        - chat_app_username | default('') | string | trim | length > 0
-        - chat_app_password | default('') | string | trim | length > 0
+        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length > 0
 
-    - name: Post remediation summary as thread reply under incident message
-      ansible.builtin.uri:
-        url: "{{ apache_troubleshoot_chat_webhook_url }}"
-        method: POST
-        body_format: json
-        body:
-          body: >-
-            [remediation.complete] {{ itsm_incident_ref | string | trim }} on
-            {{ vm_name | string | trim }} — {{ apache_troubleshoot_summary }}
-          parent_id: "{{ apache_troubleshoot_chat_parent_message_id }}"
-        validate_certs: false
-        status_code: [201]
-      when:
-        - apache_troubleshoot_post_chat_summary | default(true) | bool
-        - apache_troubleshoot_chat_parent_message_id | default('') | string | trim | length > 0
-
-    - name: Skip chat notification when incident parent message was not found
+    - name: Skip chat notification when agent thread id is unavailable
       ansible.builtin.debug:
         msg: >-
-          No [incident.created] chat message found for {{ itsm_incident_ref | string | trim }};
-          skipping remediation summary post to avoid a top-level channel message.
+          thread_id is missing; skipping remediation summary post to chat.
+          Launch via AAP MCP from the chat agent thread so thread_id is injected.
           Set apache_troubleshoot_post_chat_summary: false to silence this notice.
       when:
         - apache_troubleshoot_post_chat_summary | default(true) | bool
-        - apache_troubleshoot_chat_webhook_url | default('') | string | trim | length > 0
-        - apache_troubleshoot_chat_parent_message_id | default('') | string | trim | length == 0
+        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length == 0
 
     - name: Skip chat notification when remediation chat posts are disabled
       ansible.builtin.debug:
         msg: Remediation chat summary posting is disabled (apache_troubleshoot_post_chat_summary=false).
       when: not (apache_troubleshoot_post_chat_summary | default(true) | bool)
-
-    - name: Skip chat notification when webhook URL is unavailable
-      ansible.builtin.debug:
-        msg: >-
-          Chat webhook URL is missing or relative; skipping operations channel post.
-          Attach the Chat App credential or set chat_webhook_url to a full https URL.
-      when:
-        - apache_troubleshoot_post_chat_summary | default(true) | bool
-        - >-
-          apache_troubleshoot_chat_webhook_url | default('') | string | trim | length == 0
-          or not (apache_troubleshoot_chat_webhook_url | default('') | regex_search('^https?://'))
 
     - name: Display troubleshooting result
       ansible.builtin.debug:

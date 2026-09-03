@@ -11,7 +11,7 @@
           openshift.io/user-monitoring: "false"
           argocd.argoproj.io/managed-by: "{{ aap_casc_gitops_instance_name | default('openshift-gitops') }}"
 
-- name: List legacy Apache Probe resources still in aiops-demo namespace
+- name: Remove legacy Apache Probe resources still in aiops-demo namespace
   kubernetes.core.k8s_info:
     api_version: monitoring.coreos.com/v1
     kind: Probe

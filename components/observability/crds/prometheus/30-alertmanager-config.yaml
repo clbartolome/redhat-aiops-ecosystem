@@ -11,8 +11,9 @@ spec:
     receiver: otel-collector
     groupBy:
       - alertname
-    groupWait: 10s
-    groupInterval: 30s
+      - vm_name
+    groupWait: 0s
+    groupInterval: 10s
     repeatInterval: 4h
   receivers:
     - name: otel-collector

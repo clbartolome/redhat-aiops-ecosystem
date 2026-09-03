@@ -38,6 +38,10 @@ spec:
               value: "false"
             - name: GF_AUTH_ANONYMOUS_ENABLED
               value: "false"
+            - name: GF_AUTH_LOGIN_MAXIMUM_LIFETIME_DURATION
+              value: "{{ observability.grafana.session_duration }}"
+            - name: GF_AUTH_LOGIN_MAXIMUM_INACTIVE_LIFETIME_DURATION
+              value: "{{ observability.grafana.session_duration }}"
           readinessProbe:
             httpGet:
               path: /api/health

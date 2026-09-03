@@ -4,5 +4,6 @@ metadata:
   name: gitea-config
 data:
   GITEA__security__INSTALL_LOCK: "true"
+  GITEA__session__COOKIE_LIFETIME: "{{ gitea.session_max_age_seconds | string }}"
   GITEA__database__DB_TYPE: postgres
   GITEA__database__HOST: postgres:5432

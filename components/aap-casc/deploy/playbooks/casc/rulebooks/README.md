@@ -7,7 +7,7 @@ Rulebooks in this directory are synced to Gitea repo **Rulebooks** and consumed 
 | File | Purpose |
 | ---- | ------- |
 | `rulebooks/apache_alert_incident.yml` | Consumes `aiops.alertmanager` Kafka topic (Alertmanager webhook JSON in `event.body`) and launches **Create Apache Alert Incident** in AAP |
-| `rulebooks/itsm_app_chat_notifications.yml` | Consumes `aiops.itsm` Kafka topic and launches **Publish ITSM Chat Notification** in AAP |
+| `rulebooks/itsm_app_chat_notifications.yml` | Consumes `aiops.itsm` Kafka topic and launches **Publish ITSM Chat Notification** in AAP (posts to chat `POST /incidents`) |
 
 ## Event flow
 

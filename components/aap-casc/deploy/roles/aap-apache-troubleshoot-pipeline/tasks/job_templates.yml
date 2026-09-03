@@ -28,11 +28,7 @@
     job_type: run
     state: present
     survey_enabled: false
-    extra_vars: >-
-      {{
-        aap_apache_troubleshoot_pipeline_job_extra_vars_troubleshoot
-        | combine({'chat_webhook_url': aap_apache_troubleshoot_chat_webhook_url}, recursive=True)
-      }}
+    extra_vars: "{{ aap_apache_troubleshoot_pipeline_job_extra_vars_troubleshoot }}"
     ask_variables_on_launch: true
     credentials:
       - "{{ aap_apache_troubleshoot_pipeline_credential_vms }}"
