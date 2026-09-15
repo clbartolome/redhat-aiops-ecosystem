@@ -98,6 +98,7 @@
       - "{{ aap_httpd_pipeline_credential_vms }}"
       - "{{ aap_httpd_pipeline_credential_itsm }}"
       - "{{ aap_httpd_pipeline_credential_aap }}"
+      - "{{ aap_httpd_pipeline_credential_chat }}"
     controller_host: "{{ aap_httpd_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"

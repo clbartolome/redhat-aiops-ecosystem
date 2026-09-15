@@ -9,6 +9,8 @@
     inventory: "{{ aap_apache_stack_pipeline_inventory }}"
     survey_enabled: true
     survey_spec: "{{ aap_apache_stack_pipeline_workflow_survey_spec }}"
+    extra_vars: "{{ aap_apache_stack_pipeline_workflow_extra_vars | default({'thread_id': ''}) }}"
+    ask_variables_on_launch: true
     state: present
     controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
@@ -23,6 +25,7 @@
     extra_data:
       itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      thread_id: "{{ '{{ thread_id | default(\"\") }}' }}"
       target_host: "{{ '{{ vm_name }}' }}"
       vm_name: "{{ '{{ vm_name }}' }}"
       app_repo: "{{ '{{ app_repo }}' }}"
@@ -46,6 +49,9 @@
     extra_data:
       itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
+      cpus: "{{ '{{ cpus }}' }}"
+      mem: "{{ '{{ mem }}' }}"
     success_nodes: []
     state: present
     controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
@@ -61,6 +67,9 @@
     extra_data:
       itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
+      cpus: "{{ '{{ cpus }}' }}"
+      mem: "{{ '{{ mem }}' }}"
     success_nodes:
       - deploy_apache_app_stack
     state: present

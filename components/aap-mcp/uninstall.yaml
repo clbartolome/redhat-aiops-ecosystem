@@ -12,38 +12,80 @@
         mcp:
           disabled: true
 
-- name: Delete AnsibleMCPServer instance
+- name: Set AAP MCP resource names
+  ansible.builtin.set_fact:
+    aap_mcp_cr_name: "{{ aap_mcp.instance_name }}-mcp"
+    aap_mcp_deployment_name: "{{ aap_mcp.instance_name }}-mcp"
+
+- name: Look up AnsibleMCPServer custom resources before removal
+  kubernetes.core.k8s_info:
+    api_version: mcpserver.ansible.com/v1alpha1
+    kind: AnsibleMCPServer
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_cr_list
+
+- name: Resolve AnsibleMCPServer custom resource name for removal
+  ansible.builtin.set_fact:
+    aap_mcp_cr_name: "{{ aap_mcp_cr_list.resources[0].metadata.name }}"
+    aap_mcp_deployment_name: "{{ aap_mcp_cr_list.resources[0].metadata.name }}"
+  when: aap_mcp_cr_list.resources | length > 0
+
+- name: Remove AnsibleMCPServer custom resource
   kubernetes.core.k8s:
     state: absent
     api_version: mcpserver.ansible.com/v1alpha1
     kind: AnsibleMCPServer
-    name: "{{ aap_mcp.instance_name }}-mcp"
+    name: "{{ aap_mcp_cr_name }}"
     namespace: "{{ aap_mcp.namespace }}"
-  ignore_errors: true
+    wait: true
+    wait_timeout: 300
+  when: aap_mcp_cr_list.resources | length > 0
 
-- name: Wait for AAP MCP Deployment removal
+- name: Wait for AAP MCP Deployment to be removed
   kubernetes.core.k8s_info:
     api_version: apps/v1
     kind: Deployment
-    name: "{{ aap_mcp.instance_name }}-mcp"
+    name: "{{ aap_mcp_deployment_name }}"
     namespace: "{{ aap_mcp.namespace }}"
   register: aap_mcp_deployment
-  until: aap_mcp_deployment.resources | length == 0
-  retries: 30
+  until: aap_mcp_deployment.resources | default([]) | length == 0
+  retries: 18
   delay: 10
-  ignore_errors: true
+  failed_when: false
 
-- name: Wait for AAP MCP Route removal
+- name: Remove remaining AAP MCP Deployment when operator teardown is stuck
+  kubernetes.core.k8s:
+    state: absent
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ aap_mcp_deployment_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+    wait: true
+    wait_timeout: 120
+  when: aap_mcp_deployment.resources | default([]) | length > 0
+
+- name: Wait for AAP MCP Route to be removed
   kubernetes.core.k8s_info:
     api_version: route.openshift.io/v1
     kind: Route
-    name: "{{ aap_mcp.instance_name }}-mcp"
+    name: "{{ aap_mcp_deployment_name }}"
     namespace: "{{ aap_mcp.namespace }}"
   register: aap_mcp_route
-  until: aap_mcp_route.resources | length == 0
-  retries: 30
+  until: aap_mcp_route.resources | default([]) | length == 0
+  retries: 18
   delay: 10
-  ignore_errors: true
+  failed_when: false
+
+- name: Remove remaining AAP MCP Route when operator teardown is stuck
+  kubernetes.core.k8s:
+    state: absent
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: "{{ aap_mcp_deployment_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+    wait: true
+    wait_timeout: 120
+  when: aap_mcp_route.resources | default([]) | length > 0
 
 - name: Delete AAP MCP token secret
   kubernetes.core.k8s:
@@ -52,4 +94,4 @@
     kind: Secret
     name: "{{ aap_mcp.token_secret_name }}"
     namespace: "{{ aap_mcp.namespace }}"
-  ignore_errors: true
+  failed_when: false

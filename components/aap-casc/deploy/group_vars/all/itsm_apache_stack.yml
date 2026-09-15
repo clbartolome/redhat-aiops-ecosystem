@@ -17,6 +17,7 @@ aap_itsm_job_template_extra_vars:
 aap_itsm_subworkflow_extra_vars:
   itsm_change_ref: ""
   itsm_service_request_ref: ""
+  thread_id: ""
 
 # Register ITSM VM Asset must not declare empty cpus/mem/vm_name placeholders — extra vars
 # cannot be overridden by set_fact, which breaks ITSM/cluster lookup during modification flows.
@@ -30,6 +31,7 @@ aap_vm_survey_job_extra_vars:
 aap_httpd_survey_job_extra_vars:
   target_host: ""
   vm_name: ""
+  thread_id: ""
   app_repo: ""
   app_branch: ""
   apache_app_rpm_packages: ""

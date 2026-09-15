@@ -1,0 +1,36 @@
+---
+- name: Set AAP uninstall controller connection facts from platform facts when missing
+  ansible.builtin.set_fact:
+    aap_uninstall_controller_host: "{{ aap_platform.aap.gateway_url }}"
+    aap_uninstall_validate_certs: "{{ aap_casc.validate_certs | default(false) | bool }}"
+  when: aap_uninstall_controller_host is not defined
+
+- name: Obtain AAP gateway OAuth token for EDA API cleanup when missing
+  ansible.builtin.include_role:
+    name: aap-controller
+  vars:
+    aap_controller_token_fact_name: aap_uninstall_controller_oauthtoken
+  when: aap_uninstall_controller_oauthtoken is not defined
+
+- name: Probe EDA API availability before resource cleanup
+  ansible.builtin.uri:
+    url: "{{ aap_uninstall_controller_host }}/api/eda/v1/projects/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+    return_content: true
+  register: aap_uninstall_eda_api_probe
+  failed_when: false
+
+- name: Set EDA API reachable fact for uninstall cleanup
+  ansible.builtin.set_fact:
+    aap_uninstall_eda_api_reachable: "{{ aap_uninstall_eda_api_probe.status | default(0) == 200 }}"
+
+- name: Skip EDA API resource cleanup when EDA is already unavailable
+  ansible.builtin.debug:
+    msg: >-
+      Skipping EDA resource cleanup because the EDA API is not reachable at
+      {{ aap_uninstall_controller_host }}/api/eda/v1/. EDA may already be disabled.
+  when: not aap_uninstall_eda_api_reachable | bool

@@ -6,7 +6,7 @@
     inventory: "{{ aap_vm_pipeline_inventory }}"
     survey_enabled: true
     survey_spec: "{{ aap_vm_pipeline_workflow_survey_spec }}"
-    extra_vars: "{{ aap_itsm_subworkflow_extra_vars }}"
+    extra_vars: "{{ aap_itsm_subworkflow_extra_vars | combine(aap_vm_survey_job_extra_vars) }}"
     ask_variables_on_launch: true
     state: present
     controller_host: "{{ aap_vm_pipeline_controller_host }}"

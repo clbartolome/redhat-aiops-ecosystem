@@ -1,0 +1,19 @@
+---
+- name: Build Generic Application stack deployment chat summary
+  ansible.builtin.set_fact:
+    apache_stack_deployment_chat_summary: >-
+      {{
+        (vm_name | default(target_host | default('unknown'), true) | string | trim)
+        ~ ' — '
+        ~ (itsm_change_task_completion_comment | default('') | replace('\n', ' '))
+      }}
+
+- name: Post deployment completion to chat agent thread
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: post_chat_thread_info.yml
+  vars:
+    chat_thread_info_message: >-
+      [deployment.complete] {{
+        itsm_service_request_ref | default(itsm_change_ref | default('', true), true) | string | trim
+      }} — {{ apache_stack_deployment_chat_summary }}

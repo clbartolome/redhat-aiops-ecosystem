@@ -32,12 +32,12 @@ aap_vm_pipeline_workflow_survey_spec:
     - question_name: cpus
       question_description: Number of CPU cores
       required: true
-      type: integer
+      type: text
       variable: cpus
     - question_name: mem
       question_description: Memory in GiB
       required: true
-      type: integer
+      type: text
       variable: mem
 
 aap_vm_pipeline_credential_gitea: Gitea

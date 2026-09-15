@@ -3,9 +3,18 @@
   hosts: localhost
   gather_facts: false
   vars_files:
-    - ../../group_vars/all/aap_apache_stack_pipeline.yml
-    - ../../group_vars/all/aap_vm_pipeline.yml
-    - ../../group_vars/all/aap_httpd_pipeline.yml
-    - ../../group_vars/all/itsm_apache_stack.yml
-  roles:
-    - role: aap-apache-stack-pipeline
+    - ../../../../../vars.yaml
+  tasks:
+    - name: Load AAP CASC group variables
+      ansible.builtin.include_vars:
+        dir: "{{ playbook_dir }}/../../group_vars/all"
+        extensions:
+          - yml
+
+    - name: Discover platform connection facts
+      ansible.builtin.include_role:
+        name: aap-platform-facts
+
+    - name: Refresh AAP Deploy Generic Application Stack master workflow
+      ansible.builtin.include_role:
+        name: aap-apache-stack-pipeline

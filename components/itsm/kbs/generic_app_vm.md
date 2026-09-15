@@ -11,7 +11,7 @@ This article describes the procedure to create a Virtual Machine with an applica
 
 ## Procedure
 
-1. Open an ITSM service request using the **Generic-Application-Stack** template providing the following values:
+1. Open an ITSM service request using the **Generic-Application-Stack** ITSM template providing the following parameters:
 
     - vm_name: Virtual Machine name
     - cpus: Virtual Machine number of CPUs
@@ -19,10 +19,10 @@ This article describes the procedure to create a Virtual Machine with an applica
     - app_repo: Git repository in which resides the application code
 
 
-2. Search the workflow job template called **Deploy Generic Application Stack** in Ansible Automation Platform.
+2. Search the workflow job template called "Deploy Generic Application Stack" in Ansible Automation Platform.
 
 
-3. Launch the AAP workflow job template passing the following parameters:
+3. Launch the Ansible Automation Platform "Deploy Generic Application Stack" workflow job template passing the following extra_vars:
 
     - vm_name: Virtual Machine name
     - cpus: Virtual Machine number of CPUs

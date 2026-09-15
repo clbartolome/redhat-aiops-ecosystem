@@ -22,6 +22,7 @@
     extra_data:
       itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      thread_id: "{{ '{{ thread_id | default(\"\") }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_start_httpd }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"

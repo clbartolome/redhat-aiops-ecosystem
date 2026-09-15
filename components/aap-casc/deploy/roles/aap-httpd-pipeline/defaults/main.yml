@@ -68,4 +68,5 @@ aap_httpd_pipeline_workflow_survey_spec:
 aap_httpd_pipeline_credential_vms: Virtual Machines
 aap_httpd_pipeline_credential_gitea: Gitea
 aap_httpd_pipeline_credential_openshift: OpenShift Cluster
+aap_httpd_pipeline_credential_chat: Chat App
 

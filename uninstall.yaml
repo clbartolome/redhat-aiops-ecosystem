@@ -13,6 +13,10 @@
       ansible.builtin.include_tasks:
         file: components/aap-casc/uninstall.yaml
 
+    - name: Uninstall AAP EDA
+      ansible.builtin.include_tasks:
+        file: components/aap-eda/uninstall.yaml
+
     - name: Uninstall monitor
       ansible.builtin.include_tasks:
         file: components/monitor/uninstall.yaml
@@ -36,10 +40,6 @@
     - name: Uninstall ITSM
       ansible.builtin.include_tasks:
         file: components/itsm/uninstall.yaml
-
-    - name: Uninstall AAP EDA
-      ansible.builtin.include_tasks:
-        file: components/aap-eda/uninstall.yaml
 
     - name: Uninstall AAP MCP
       ansible.builtin.include_tasks:

@@ -1,0 +1,76 @@
+---
+- name: Lookup {{ eda_uninstall_activation_name }} rulebook activation in EDA
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/eda/v1/activations/?name={{
+      eda_uninstall_activation_name | urlencode }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+    return_content: true
+  register: eda_uninstall_activation_lookup
+
+- name: Disable {{ eda_uninstall_activation_name }} rulebook activation before delete
+  ansible.eda.rulebook_activation:
+    name: "{{ eda_uninstall_activation_name }}"
+    organization_name: "{{ eda_uninstall_activation_organization | default(aap_eda_pipeline_organization) }}"
+    state: disabled
+    controller_host: "{{ aap_uninstall_controller_host }}"
+    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+  when: eda_uninstall_activation_lookup.json.count | default(0) | int > 0
+
+- name: Wait until {{ eda_uninstall_activation_name }} rulebook activation is stopped
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/eda/v1/activations/?name={{
+      eda_uninstall_activation_name | urlencode }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+    return_content: true
+  register: eda_uninstall_activation_stop_wait
+  until: >
+    (
+      eda_uninstall_activation_stop_wait.json.results
+      | default([])
+      | selectattr('name', 'equalto', eda_uninstall_activation_name)
+      | map(attribute='status')
+      | list
+      | first
+      | default('stopped')
+    ) in ['stopped', 'failed', 'disabled']
+  retries: 30
+  delay: 3
+  when: eda_uninstall_activation_lookup.json.count | default(0) | int > 0
+
+- name: Remove {{ eda_uninstall_activation_name }} rulebook activation from EDA
+  ansible.eda.rulebook_activation:
+    name: "{{ eda_uninstall_activation_name }}"
+    organization_name: "{{ eda_uninstall_activation_organization | default(aap_eda_pipeline_organization) }}"
+    state: absent
+    controller_host: "{{ aap_uninstall_controller_host }}"
+    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+  when: eda_uninstall_activation_lookup.json.count | default(0) | int > 0
+
+- name: Wait until {{ eda_uninstall_activation_name }} rulebook activation is removed from EDA
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/eda/v1/activations/?name={{
+      eda_uninstall_activation_name | urlencode }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+    return_content: true
+  register: eda_uninstall_activation_delete_wait
+  until: eda_uninstall_activation_delete_wait.json.count | default(0) | int == 0
+  retries: 30
+  delay: 3
+  when: eda_uninstall_activation_lookup.json.count | default(0) | int > 0

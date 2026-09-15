@@ -4,7 +4,6 @@
 
 > - OpenShift: **4.21**
 
-
 ## Setup
 
 ### Pre-Requisites
@@ -17,12 +16,14 @@ The following operators must be installed in the cluster
 > - Prometheus Operator: **0.56.3** (`beta`, namespace `observability`)
 > - OpenShift Virtualization: **4.21.16** (`stable`)
 
-Build the Ansible execution environment:
+Build the Ansible execution environment:cd an
 
 ```sh
 cd ansible-navigator
 ansible-builder build -t rh-aiops-ee:latest
 ```
+
+
 
 ### Configuration
 
@@ -41,11 +42,8 @@ Define components in dependency order (`openshift_mcp` → `aap_mcp` → `aap_ed
 ### Install
 
 - Open a terminal
-
 - Login into OpenShift
-
 - Access installation->ansible-navigator: `cd ansible-navigator`
-
 - Configure openshift environment:
 
 ```sh
@@ -61,14 +59,13 @@ ansible-navigator run ../install.yaml -m stdout \
     -e "api_token=$OPENSHIFT_TOKEN"
 ```
 
+
+
 ### Clean-up
 
 - Open a terminal
-
 - Login into OpenShift
-
 - Access installation->ansible-navigator: `cd ansible-navigator`
-
 - Configure openshift environment:
 
 ```sh

@@ -26,5 +26,5 @@ gitea_repos_sync_repo_defs:
   - name: Rulebooks
     local_dir: rulebooks
   - name: AIOps_App
-    source_url: https://github.com/zaskan/AIOps_App.git
+    source_url: https://github.com/clbartolome/qr-display.git
     branch: main

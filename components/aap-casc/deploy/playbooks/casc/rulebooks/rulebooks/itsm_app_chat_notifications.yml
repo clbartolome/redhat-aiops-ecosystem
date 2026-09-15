@@ -22,7 +22,9 @@
               chat_incident_title: "{{ event.body.incident.title | default('Untitled') }}"
               chat_incident_message: >-
                 {{ event.body.incident.public_id | default('?') }} —
-                {{ event.body.incident.description | default(event.body.incident.title | default('Untitled')) }}
+                {{ event.body.incident.description | default(event.body.incident.title | default('Untitled'))
+                  ~ '\nitsm_incident_ref: '
+                  ~ (event.body.incident.public_id | default('?')) }}
               chat_incident_severity: "{{ event.body.incident.severity | default('medium') }}"
 
     - name: Post request.submitted to chat

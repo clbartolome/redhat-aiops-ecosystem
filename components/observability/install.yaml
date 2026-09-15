@@ -1,5 +1,12 @@
 ---
-- name: Create observability project
+- name: Check whether observability namespace already exists
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ observability.namespace }}"
+  register: observability_namespace
+
+- name: Create observability project with UWM exclusion label
   kubernetes.core.k8s:
     state: present
     definition:
@@ -9,6 +16,7 @@
         name: "{{ observability.namespace }}"
         labels:
           openshift.io/user-monitoring: "false"
+  when: observability_namespace.resources | length == 0
 
 - name: Ensure observability namespace stays excluded from OpenShift UWM
   kubernetes.core.k8s:
@@ -16,6 +24,7 @@
     api_version: v1
     kind: Namespace
     name: "{{ observability.namespace }}"
+    merge_type: merge
     definition:
       metadata:
         labels:
@@ -75,19 +84,55 @@
       observability install (see README).
   when: observability_kafka_crd.resources | length == 0
 
-- name: Collect Prometheus Operator prerequisite manifests
-  ansible.builtin.set_fact:
-    observability_prerequisite_manifest_files: >-
-      {{ query('fileglob', playbook_dir ~ '/components/observability/crds/prerequisites/*.yaml') | sort }}
+- name: Check OperatorGroups in observability namespace
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1
+    kind: OperatorGroup
+    namespace: "{{ observability.namespace }}"
+  register: observability_operatorgroups
 
-- name: Apply Prometheus Operator prerequisites
+- name: Remove duplicate Ansible-managed OperatorGroup
+  kubernetes.core.k8s:
+    state: absent
+    api_version: operators.coreos.com/v1
+    kind: OperatorGroup
+    name: observability-prometheus
+    namespace: "{{ observability.namespace }}"
+  when:
+    - observability_operatorgroups.resources | length > 1
+    - observability_operatorgroups.resources | map(attribute='metadata.name') | list is contains('observability-prometheus')
+
+- name: Refresh OperatorGroups after remediation
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1
+    kind: OperatorGroup
+    namespace: "{{ observability.namespace }}"
+  register: observability_operatorgroups
+
+- name: Check for Prometheus Operator subscription
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+    namespace: "{{ observability.namespace }}"
+  register: observability_prometheus_subscriptions
+
+- name: Apply Prometheus OperatorGroup when none exists
   kubernetes.core.k8s:
     state: present
     namespace: "{{ observability.namespace }}"
-    definition: "{{ lookup('template', item) | from_yaml }}"
-  loop: "{{ observability_prerequisite_manifest_files }}"
-  loop_control:
-    label: "{{ item | basename }}"
+    definition: "{{ lookup('template', playbook_dir ~ '/components/observability/crds/prerequisites/10-operatorgroup.yaml') | from_yaml }}"
+  when: observability_operatorgroups.resources | length == 0
+
+- name: Apply Prometheus Operator subscription when none exists
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ observability.namespace }}"
+    definition: "{{ lookup('template', playbook_dir ~ '/components/observability/crds/prerequisites/20-subscription.yaml') | from_yaml }}"
+  when: >-
+    observability_prometheus_subscriptions.resources
+    | selectattr('metadata.name', 'equalto', 'prometheus')
+    | list
+    | length == 0
 
 - name: Wait for Prometheus Operator subscription to install CSV
   kubernetes.core.k8s_info:
@@ -127,10 +172,11 @@
 - name: Fail when Prometheus Operator is not installed
   ansible.builtin.fail:
     msg: >-
-      CRD prometheuses.monitoring.coreos.com is not installed after the
-      Prometheus Operator subscription in {{ observability.namespace }} was
-      applied. Inspect the subscription and CSV with:
-      oc get subscription,csv -n {{ observability.namespace }}.
+      CRD prometheuses.monitoring.coreos.com is not installed. Install Prometheus
+      Operator 0.56.3 (channel beta) in {{ observability.namespace }} from
+      OperatorHub before running observability install (see README). The namespace
+      must contain exactly one OperatorGroup; inspect OLM resources with:
+      oc get operatorgroup,subscription,csv -n {{ observability.namespace }}.
   when: observability_prometheus_crd.resources | length == 0
 
 - name: Collect observability stack manifest files

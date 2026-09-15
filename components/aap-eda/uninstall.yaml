@@ -1,4 +1,38 @@
 ---
+- name: Resolve AAP CASC deploy directory for EDA resource cleanup
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/components/aap-casc/deploy/group_vars/all"
+  register: aap_eda_uninstall_deploy_group_vars_from_root
+
+- name: Set AAP CASC deploy directory from repository root
+  ansible.builtin.set_fact:
+    aap_casc_deploy_dir: "{{ playbook_dir }}/components/aap-casc/deploy"
+  when: aap_eda_uninstall_deploy_group_vars_from_root.stat.exists
+
+- name: Set AAP CASC deploy directory from casc playbooks path
+  ansible.builtin.set_fact:
+    aap_casc_deploy_dir: "{{ playbook_dir }}/../components/aap-casc/deploy"
+  when: not aap_eda_uninstall_deploy_group_vars_from_root.stat.exists
+
+- name: Load AAP CASC group variables for EDA resource cleanup
+  ansible.builtin.include_vars:
+    dir: "{{ aap_casc_deploy_dir }}/group_vars/all"
+    extensions:
+      - yml
+
+- name: Load AAP CASC observability mapping for EDA resource cleanup
+  ansible.builtin.include_vars:
+    file: "{{ aap_casc_deploy_dir }}/group_vars/all/observability-mapping.yml"
+
+- name: Discover platform connection facts for EDA resource cleanup
+  ansible.builtin.include_role:
+    name: aap-platform-facts
+
+- name: Remove EDA activations, projects, and credentials via API before platform teardown
+  ansible.builtin.include_role:
+    name: aap-uninstall
+    tasks_from: eda_resources.yml
+
 - name: Disable EDA on Ansible Automation Platform instance
   kubernetes.core.k8s:
     state: present
@@ -24,32 +58,58 @@
       - "{{ aap_eda.instance_name }}-eda-db-fields-encryption-secret"
       - "{{ aap_eda.instance_name }}-eda-admin-password"
 
-- name: Wait for EDA custom resource removal
+- name: Look up Event-Driven Ansible custom resources before removal
   kubernetes.core.k8s_info:
+    api_version: eda.ansible.com/v1alpha1
+    kind: EDA
+    namespace: "{{ aap_eda.namespace }}"
+  register: aap_eda_cr_list
+
+- name: Resolve EDA custom resource name for removal
+  ansible.builtin.set_fact:
+    aap_eda_cr_name: "{{ aap_eda_cr_list.resources[0].metadata.name }}"
+  when: aap_eda_cr_list.resources | length > 0
+
+- name: Remove Event-Driven Ansible custom resource
+  kubernetes.core.k8s:
+    state: absent
     api_version: eda.ansible.com/v1alpha1
     kind: EDA
     name: "{{ aap_eda_cr_name }}"
     namespace: "{{ aap_eda.namespace }}"
-  register: aap_eda_cr
-  until: aap_eda_cr.resources | length == 0
-  retries: 30
-  delay: 10
-  ignore_errors: true
+    wait: true
+    wait_timeout: 300
+  when: aap_eda_cr_list.resources | length > 0
 
-- name: Wait for AAP EDA Deployment removal
+- name: Wait for AAP EDA Deployments to be removed
   kubernetes.core.k8s_info:
     api_version: apps/v1
     kind: Deployment
     name: "{{ item }}"
     namespace: "{{ aap_eda.namespace }}"
   register: aap_eda_deployment
-  until: aap_eda_deployment.resources | length == 0
-  retries: 30
+  until: aap_eda_deployment.resources | default([]) | length == 0
+  retries: 18
   delay: 10
-  ignore_errors: true
+  failed_when: false
   loop: "{{ aap_eda_deployment_names | unique }}"
   loop_control:
     label: "{{ item }}"
+
+- name: Remove remaining AAP EDA Deployments when operator teardown is stuck
+  kubernetes.core.k8s:
+    state: absent
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item.item }}"
+    namespace: "{{ aap_eda.namespace }}"
+    wait: true
+    wait_timeout: 120
+  loop: "{{ aap_eda_deployment.results | default([]) }}"
+  when:
+    - item.resources | default([]) | length > 0
+  loop_control:
+    label: "{{ item.item | default('unknown') }}"
 
 - name: Check whether any EDA Deployments remain before database reset
   kubernetes.core.k8s_info:

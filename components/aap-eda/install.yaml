@@ -83,57 +83,7 @@
 
 - name: Reset stuck EDA enablement with disable and re-enable cycle
   when: not aap_eda_cr_present | bool
-  block:
-    - name: Temporarily disable EDA to reset operator reconciliation
-      kubernetes.core.k8s:
-        state: present
-        api_version: aap.ansible.com/v1alpha1
-        kind: AnsibleAutomationPlatform
-        name: "{{ aap_eda.instance_name }}"
-        namespace: "{{ aap_eda.namespace }}"
-        merge_type: merge
-        definition:
-          spec:
-            eda:
-              disabled: true
-
-    - name: Wait for EDA custom resource removal during reconcile reset
-      kubernetes.core.k8s_info:
-        api_version: eda.ansible.com/v1alpha1
-        kind: EDA
-        name: "{{ aap_eda_cr_name }}"
-        namespace: "{{ aap_eda.namespace }}"
-      register: aap_eda_cr_removed
-      until: aap_eda_cr_removed.resources | default([]) | length == 0
-      retries: 30
-      delay: 10
-      failed_when: false
-
-    - name: Re-enable EDA on Ansible Automation Platform instance
-      kubernetes.core.k8s:
-        state: present
-        api_version: aap.ansible.com/v1alpha1
-        kind: AnsibleAutomationPlatform
-        name: "{{ aap_eda.instance_name }}"
-        namespace: "{{ aap_eda.namespace }}"
-        merge_type: merge
-        definition: "{{ lookup('template', playbook_dir ~ '/components/aap-eda/eda-spec.yaml.j2') | from_yaml }}"
-
-    - name: Wait for EDA custom resource after reconcile reset
-      kubernetes.core.k8s_info:
-        api_version: eda.ansible.com/v1alpha1
-        kind: EDA
-        name: "{{ aap_eda_cr_name }}"
-        namespace: "{{ aap_eda.namespace }}"
-      register: aap_eda_cr_info
-      until: aap_eda_cr_info.resources | default([]) | length > 0
-      retries: "{{ aap_eda_cr_wait_retries | default(60) }}"
-      delay: "{{ aap_eda_cr_wait_delay | default(10) }}"
-      failed_when: false
-
-    - name: Set EDA custom resource presence after reconcile reset
-      ansible.builtin.set_fact:
-        aap_eda_cr_present: "{{ aap_eda_cr_info.resources | default([]) | length > 0 }}"
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/components/aap-eda/eda_reconcile_reset.yml"
 
 - name: List Event-Driven Ansible custom resources when expected name is missing
   when: not aap_eda_cr_present | bool
@@ -169,6 +119,22 @@
     name: "{{ aap_eda.instance_name }}-eda-api"
     namespace: "{{ aap_eda.namespace }}"
   register: aap_eda_api_deployment_precheck
+
+- name: Reset stuck EDA enablement when CR exists but workloads are missing
+  when:
+    - aap_eda_cr_present | bool
+    - aap_eda_api_deployment_precheck.resources | default([]) | length == 0
+  block:
+    - name: Run EDA operator reconcile reset for missing workloads
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/components/aap-eda/eda_reconcile_reset.yml"
+
+    - name: Re-read ansible-eda-api Deployment after reconcile reset
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ aap_eda.instance_name }}-eda-api"
+        namespace: "{{ aap_eda.namespace }}"
+      register: aap_eda_api_deployment_precheck
 
 - name: Restart ansible-eda-api Deployment after progress deadline exceeded
   kubernetes.core.k8s:

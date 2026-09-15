@@ -1,60 +1,52 @@
 ---
-- name: Remove legacy EDA event streams when present
-  ansible.builtin.include_tasks: remove_legacy_event_streams.yml
+- name: Prepare AAP connection facts for EDA resource cleanup
+  ansible.builtin.include_tasks: eda_uninstall_prepare.yml
 
-- name: Remove ITSM App Chat rulebook activation from EDA
-  ansible.eda.rulebook_activation:
-    name: "{{ aap_eda_itsm_webhook_pipeline_activation_name }}"
-    state: absent
-    controller_host: "{{ aap_uninstall_controller_host }}"
-    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-    validate_certs: "{{ aap_uninstall_validate_certs }}"
-  ignore_errors: true
+- name: Remove EDA pipeline resources via API while EDA is still running
+  when: aap_uninstall_eda_api_reachable | bool
+  block:
+    - name: Remove ITSM App Chat rulebook activation from EDA
+      ansible.builtin.include_tasks: eda_remove_activation.yml
+      vars:
+        eda_uninstall_activation_name: "{{ aap_eda_itsm_webhook_pipeline_activation_name }}"
+        eda_uninstall_activation_organization: "{{ aap_eda_itsm_webhook_pipeline_organization }}"
 
-- name: Remove Apache alert rulebook activation from EDA
-  ansible.eda.rulebook_activation:
-    name: "{{ aap_eda_pipeline_activation_name }}"
-    state: absent
-    controller_host: "{{ aap_uninstall_controller_host }}"
-    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-    validate_certs: "{{ aap_uninstall_validate_certs }}"
-  ignore_errors: true
+    - name: Remove Apache alert rulebook activation from EDA
+      ansible.builtin.include_tasks: eda_remove_activation.yml
+      vars:
+        eda_uninstall_activation_name: "{{ aap_eda_pipeline_activation_name }}"
 
-- name: Remove test Apache alert rulebook activation from EDA if present
-  ansible.eda.rulebook_activation:
-    name: Apache Alert Incident Activation Test
-    state: absent
-    controller_host: "{{ aap_uninstall_controller_host }}"
-    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-    validate_certs: "{{ aap_uninstall_validate_certs }}"
-  ignore_errors: true
+    - name: Remove test Apache alert rulebook activation from EDA if present
+      ansible.builtin.include_tasks: eda_remove_activation.yml
+      vars:
+        eda_uninstall_activation_name: Apache Alert Incident Activation Test
 
-- name: Remove AIOps Rulebooks EDA project
-  ansible.eda.project:
-    name: "{{ aap_eda_pipeline_project }}"
-    state: absent
-    controller_host: "{{ aap_uninstall_controller_host }}"
-    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-    validate_certs: "{{ aap_uninstall_validate_certs }}"
-  ignore_errors: true
+    - name: Remove legacy EDA event streams when present
+      ansible.builtin.include_tasks: remove_legacy_event_streams.yml
 
-- name: Remove AIOps decision environment from EDA
-  ansible.eda.decision_environment:
-    name: "{{ aap_eda_pipeline_decision_environment }}"
-    state: absent
-    controller_host: "{{ aap_uninstall_controller_host }}"
-    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-    validate_certs: "{{ aap_uninstall_validate_certs }}"
-  ignore_errors: true
+    - name: Remove AIOps Rulebooks EDA project
+      ansible.eda.project:
+        name: "{{ aap_eda_pipeline_project }}"
+        state: absent
+        controller_host: "{{ aap_uninstall_controller_host }}"
+        controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
+        validate_certs: "{{ aap_uninstall_validate_certs }}"
 
-- name: Remove EDA credentials for Apache alert pipeline
-  ansible.eda.credential:
-    name: "{{ item }}"
-    state: absent
-    controller_host: "{{ aap_uninstall_controller_host }}"
-    controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-    validate_certs: "{{ aap_uninstall_validate_certs }}"
-  loop:
-    - "{{ aap_eda_pipeline_gitea_credential }}"
-    - "{{ aap_eda_pipeline_controller_credential }}"
-  ignore_errors: true
+    - name: Remove AIOps decision environment from EDA
+      ansible.eda.decision_environment:
+        name: "{{ aap_eda_pipeline_decision_environment }}"
+        state: absent
+        controller_host: "{{ aap_uninstall_controller_host }}"
+        controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
+        validate_certs: "{{ aap_uninstall_validate_certs }}"
+
+    - name: Remove EDA credentials for Apache alert pipeline
+      ansible.eda.credential:
+        name: "{{ item }}"
+        state: absent
+        controller_host: "{{ aap_uninstall_controller_host }}"
+        controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
+        validate_certs: "{{ aap_uninstall_validate_certs }}"
+      loop:
+        - "{{ aap_eda_pipeline_gitea_credential }}"
+        - "{{ aap_eda_pipeline_controller_credential }}"

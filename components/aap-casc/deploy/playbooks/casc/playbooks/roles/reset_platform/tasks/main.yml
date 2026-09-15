@@ -49,10 +49,10 @@
   tags:
     - aap_jts
 
-- name: Clear operations channel chat history
-  ansible.builtin.include_tasks: chat_clear_operations_channel.yml
-  tags:
-    - chat
+# - name: Clear operations channel chat history
+#   ansible.builtin.include_tasks: chat_clear_operations_channel.yml
+#   tags:
+#     - chat
 
 - name: Run AAP Cleanup Job Details system job
   ansible.builtin.include_tasks: aap_cleanup_job_details.yml

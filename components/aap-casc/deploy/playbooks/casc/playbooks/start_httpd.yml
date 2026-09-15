@@ -37,3 +37,37 @@
       ansible.builtin.import_role:
         name: itsm_change_task
         tasks_from: complete.yml
+
+    - name: Load chat-app credentials for deployment completion post
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: load_chat_credential.yml
+      when:
+        - apache_stack_post_chat_summary | default(true) | bool
+        - itsm_change_task_completion_comment | default('') | string | trim | length > 0
+        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length > 0
+
+    - name: Post Generic Application stack deployment completion to chat agent thread
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: post_chat_deployment_completion.yml
+      when:
+        - apache_stack_post_chat_summary | default(true) | bool
+        - itsm_change_task_completion_comment | default('') | string | trim | length > 0
+        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length > 0
+
+    - name: Skip chat notification when agent thread id is unavailable
+      ansible.builtin.debug:
+        msg: >-
+          thread_id is missing; skipping deployment completion post to chat.
+          Launch Deploy Generic Application Stack from the chat agent thread so thread_id is injected.
+          Set apache_stack_post_chat_summary: false to silence this notice.
+      when:
+        - apache_stack_post_chat_summary | default(true) | bool
+        - itsm_change_task_completion_comment | default('') | string | trim | length > 0
+        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length == 0
+
+    - name: Skip chat notification when deployment chat posts are disabled
+      ansible.builtin.debug:
+        msg: Deployment chat summary posting is disabled (apache_stack_post_chat_summary=false).
+      when: not (apache_stack_post_chat_summary | default(true) | bool)
