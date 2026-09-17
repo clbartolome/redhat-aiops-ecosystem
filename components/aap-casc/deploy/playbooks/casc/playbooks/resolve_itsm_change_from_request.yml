@@ -1,0 +1,84 @@
+---
+- name: Resolve ITSM change ref from service request for workflow
+  hosts: localhost
+  gather_facts: false
+  vars:
+    itsm_resolve_change_validate_certs: false
+  tasks:
+    - name: Load ITSM API credentials
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: load_itsm_credential.yml
+
+    - name: Assert ITSM service request ref is provided
+      ansible.builtin.assert:
+        that:
+          - itsm_service_request_ref is defined
+          - itsm_service_request_ref | string | trim | length > 0
+        fail_msg: >-
+          itsm_service_request_ref is required. Launch Deploy Generic Application Stack
+          with the service request ref from the submitted ITSM request.
+
+    - name: Normalize ITSM service request ref for lookup
+      ansible.builtin.set_fact:
+        itsm_resolve_change_request_ref: "{{ itsm_service_request_ref | string | trim }}"
+
+    - name: GET ITSM service request for change lookup
+      ansible.builtin.uri:
+        url: >-
+          {{ itsm_api_base_url | regex_replace('/$', '') }}/api/v1/requests/{{
+          itsm_resolve_change_request_ref | urlencode }}
+        method: GET
+        force_basic_auth: true
+        url_username: "{{ itsm_api_user }}"
+        url_password: "{{ itsm_api_password }}"
+        validate_certs: "{{ itsm_resolve_change_validate_certs }}"
+        return_content: true
+        status_code: [200]
+        headers:
+          Accept: application/json
+      register: itsm_resolve_service_request
+
+    - name: Fail when ITSM service request is still draft
+      ansible.builtin.fail:
+        msg: >-
+          Service request {{ itsm_resolve_change_request_ref }} exists but is still draft (not submitted).
+          Submit the Generic-Application-Stack request in ITSM before launching the workflow.
+      when:
+        - (itsm_resolve_service_request.json.status | default('') | string) == 'draft'
+          or (itsm_resolve_service_request.json.submitted_at | default('') | string | trim | length) == 0
+
+    - name: Resolve ITSM change ref from service request RITMs
+      ansible.builtin.set_fact:
+        itsm_change_ref: >-
+          {{
+            (
+              itsm_resolve_service_request.json.ritms | default([])
+              | selectattr('change_public_id', 'defined')
+              | map(attribute='change_public_id')
+              | map('string')
+              | map('trim')
+              | reject('equalto', '')
+              | list
+              | first
+              | default('', true)
+            )
+          }}
+
+    - name: Fail when no ITSM change is linked to service request
+      ansible.builtin.fail:
+        msg: >-
+          No ITSM change found for service request {{ itsm_resolve_change_request_ref }}.
+          Ensure the Generic-Application-Stack request was submitted before launching the workflow.
+      when: itsm_change_ref | default('') | length == 0
+
+    - name: Publish ITSM change ref to workflow extra vars
+      ansible.builtin.set_stats:
+        data:
+          itsm_change_ref: "{{ itsm_change_ref | string | trim }}"
+
+    - name: Display resolved ITSM change ref
+      ansible.builtin.debug:
+        msg:
+          - "Service request: {{ itsm_resolve_change_request_ref }}"
+          - "ITSM change ref: {{ itsm_change_ref }}"

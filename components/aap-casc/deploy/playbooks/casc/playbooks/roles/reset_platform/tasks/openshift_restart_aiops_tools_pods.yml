@@ -1,0 +1,108 @@
+---
+- name: Load OpenShift API credentials for aiops-tools pod restart
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: load_openshift_credential.yml
+
+- name: Capture rollout restart timestamp for aiops-tools workloads
+  ansible.builtin.set_fact:
+    reset_aiops_tools_restart_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+- name: List Deployments in aiops-tools namespace
+  kubernetes.core.k8s_info:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ reset_aiops_tools_namespace }}"
+  register: reset_aiops_tools_deployments
+
+- name: Rollout-restart Deployments in aiops-tools namespace
+  kubernetes.core.k8s:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    state: patched
+    merge_type: strategic-merge
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ reset_aiops_tools_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ reset_aiops_tools_restart_at }}"
+  loop: "{{ reset_aiops_tools_deployments.resources | default([]) }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: reset_aiops_tools_deployments.resources | default([]) | length > 0
+
+- name: Wait for aiops-tools Deployments to finish rollout restart
+  kubernetes.core.k8s_info:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ reset_aiops_tools_namespace }}"
+  register: reset_aiops_tools_rollout_status
+  until: >-
+    reset_aiops_tools_rollout_status.resources | default([]) | length > 0
+    and (
+      reset_aiops_tools_rollout_status.resources[0].status.updatedReplicas | default(0) | int
+      >= reset_aiops_tools_rollout_status.resources[0].status.replicas | default(0) | int
+    )
+    and (
+      reset_aiops_tools_rollout_status.resources[0].status.availableReplicas | default(0) | int
+      >= reset_aiops_tools_rollout_status.resources[0].status.replicas | default(0) | int
+    )
+  retries: "{{ reset_aiops_tools_rollout_wait_retries | default(30) }}"
+  delay: "{{ reset_aiops_tools_rollout_wait_delay | default(10) }}"
+  loop: "{{ reset_aiops_tools_deployments.resources | default([]) }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: reset_aiops_tools_deployments.resources | default([]) | length > 0
+
+- name: List StatefulSets in aiops-tools namespace
+  kubernetes.core.k8s_info:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    api_version: apps/v1
+    kind: StatefulSet
+    namespace: "{{ reset_aiops_tools_namespace }}"
+  register: reset_aiops_tools_statefulsets
+
+- name: Rollout-restart StatefulSets in aiops-tools namespace
+  kubernetes.core.k8s:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    state: patched
+    merge_type: strategic-merge
+    api_version: apps/v1
+    kind: StatefulSet
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ reset_aiops_tools_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ reset_aiops_tools_restart_at }}"
+  loop: "{{ reset_aiops_tools_statefulsets.resources | default([]) }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: reset_aiops_tools_statefulsets.resources | default([]) | length > 0
+
+- name: Summarize aiops-tools workload restart
+  ansible.builtin.debug:
+    msg:
+      - "Namespace: {{ reset_aiops_tools_namespace }}"
+      - "Restart timestamp: {{ reset_aiops_tools_restart_at }}"
+      - "Deployments restarted: {{ reset_aiops_tools_deployments.resources | default([]) | map(attribute='metadata.name') | list }}"
+      - "StatefulSets restarted: {{ reset_aiops_tools_statefulsets.resources | default([]) | map(attribute='metadata.name') | list }}"

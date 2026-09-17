@@ -1,0 +1,4 @@
+---
+# Entry point for ansible-navigator (run from ansible-navigator/):
+#   ansible-navigator run ../components/aap-casc/deploy/run-configure-apache-stack-workflow.yml
+- import_playbook: playbooks/casc/configure-aap-apache-stack-workflow.yml

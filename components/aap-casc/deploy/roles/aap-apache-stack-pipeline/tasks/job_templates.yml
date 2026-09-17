@@ -1,0 +1,17 @@
+---
+- name: Ensure Resolve ITSM Change from Request job template exists in AAP
+  awx.awx.job_template:
+    name: "{{ aap_apache_stack_pipeline_jt_resolve_itsm_change }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    project: "{{ aap_apache_stack_pipeline_project }}"
+    inventory: "{{ aap_apache_stack_pipeline_inventory }}"
+    playbook: "{{ aap_apache_stack_pipeline_playbook_resolve_itsm_change }}"
+    job_type: run
+    state: present
+    survey_enabled: false
+    ask_variables_on_launch: true
+    credentials:
+      - "{{ aap_apache_stack_pipeline_credential_itsm }}"
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
