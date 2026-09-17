@@ -9,3 +9,8 @@ aap_apache_stack_pipeline_workflow: Deploy Generic Application Stack
 aap_apache_stack_pipeline_vm_subworkflow: Provision VM
 aap_apache_stack_pipeline_httpd_subworkflow: Deploy Generic App
 
+aap_apache_stack_pipeline_project: AIOps Playbooks
+aap_apache_stack_pipeline_jt_resolve_itsm_change: Resolve ITSM Change from Request
+aap_apache_stack_pipeline_playbook_resolve_itsm_change: resolve_itsm_change_from_request.yml
+aap_apache_stack_pipeline_credential_itsm: ITSM App
+

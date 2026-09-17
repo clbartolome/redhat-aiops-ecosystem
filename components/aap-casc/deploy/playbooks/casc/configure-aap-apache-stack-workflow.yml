@@ -1,16 +1,16 @@
 ---
+# With ansible-navigator, run the deploy/ wrapper so group_vars and roles mount in the EE:
+#   ansible-navigator run ../components/aap-casc/deploy/run-configure-apache-stack-workflow.yml
 - name: Configure AAP Deploy Apache Application Stack master workflow
   hosts: localhost
   gather_facts: false
   vars_files:
     - ../../../../../vars.yaml
+    - ../../group_vars/all/aap_apache_stack_pipeline.yml
+    - ../../group_vars/all/itsm_apache_stack.yml
+    - ../../group_vars/all/aap_httpd_pipeline.yml
+    - ../../group_vars/all/aap_vm_pipeline.yml
   tasks:
-    - name: Load AAP CASC group variables
-      ansible.builtin.include_vars:
-        dir: "{{ playbook_dir }}/../../group_vars/all"
-        extensions:
-          - yml
-
     - name: Discover platform connection facts
       ansible.builtin.include_role:
         name: aap-platform-facts

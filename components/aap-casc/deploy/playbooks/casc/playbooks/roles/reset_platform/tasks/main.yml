@@ -37,12 +37,37 @@
     - gitea_vms
     - openshift
 
+- name: Force delete Infrastructure VM workloads when Argo CD is stuck
+  ansible.builtin.include_tasks: openshift_force_delete_gitops_vms.yml
+  tags:
+    - openshift
+    - argocd
+
 - name: Sync and prune Infrastructure VMs via Argo CD
-  ansible.builtin.include_role:
-    name: gitops_infrastructure
-    tasks_from: sync.yml
+  block:
+    - name: Refresh Infrastructure VMs Argo CD Application
+      ansible.builtin.include_role:
+        name: gitops_infrastructure
+        tasks_from: sync.yml
+      vars:
+        gitops_infrastructure_sync_wait_retries: "{{ reset_gitops_sync_wait_retries }}"
+        gitops_infrastructure_sync_wait_delay: "{{ reset_gitops_sync_wait_delay }}"
+        gitops_infrastructure_accept_unhealthy: "{{ reset_gitops_accept_unhealthy | bool }}"
+  rescue:
+    - name: Continue reset when Argo CD sync does not converge
+      ansible.builtin.debug:
+        msg: >-
+          Argo CD Application {{ reset_gitops_app_name }} did not reach a synced state within
+          {{ reset_gitops_sync_wait_retries }} attempts. Infrastructure VM workloads were force-deleted
+          directly from OpenShift; review the Argo CD UI if the application remains in error.
   tags:
     - argocd
+
+- name: Restart aiops-tools workload pods after platform reset
+  ansible.builtin.include_tasks: openshift_restart_aiops_tools_pods.yml
+  tags:
+    - openshift
+    - aiops_tools
 
 - name: Delete ephemeral Lightspeed remediation job templates
   ansible.builtin.include_tasks: aap_delete_ephemeral_remediation_jts.yml

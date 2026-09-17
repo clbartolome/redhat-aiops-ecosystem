@@ -20,8 +20,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_start }}"
     extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       thread_id: "{{ '{{ thread_id | default(\"\") }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_start_httpd }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
@@ -45,6 +45,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_register_itsm }}"
     extra_data:
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"
       app_repo: "{{ '{{ app_repo }}' }}"
@@ -67,8 +69,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_expose }}"
     extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_expose_apache }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"
@@ -92,8 +94,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_deploy }}"
     extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_deploy_app }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"
@@ -116,8 +118,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_install }}"
     extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_install_httpd }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"
@@ -140,8 +142,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_deploy }}"
     extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_deploy_app }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"
@@ -165,8 +167,8 @@
     organization: "{{ aap_httpd_pipeline_organization }}"
     unified_job_template: "{{ aap_httpd_pipeline_jt_install }}"
     extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_install_httpd }}"
       target_host: "{{ '{{ vm_name | default(target_host) }}' }}"
       vm_name: "{{ '{{ vm_name | default(target_host) }}' }}"

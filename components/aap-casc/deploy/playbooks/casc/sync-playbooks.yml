@@ -1,4 +1,6 @@
 ---
+# With ansible-navigator, run the deploy/ wrapper so roles and group_vars mount in the EE:
+#   ansible-navigator run ../components/aap-casc/deploy/run-sync-playbooks.yml
 - name: Sync AIOps Playbooks to Gitea and refresh AAP project
   hosts: localhost
   gather_facts: false
@@ -12,6 +14,38 @@
     gitea_repos_sync_only:
       - Playbooks
   tasks:
+    - name: Setup kubeconfig from OpenShift extra vars
+      ansible.builtin.include_role:
+        name: demos.utils.kubeconfig
+      vars:
+        kubeconfig:
+          ocp_domain: "{{ ocp_host }}"
+          ocp_api_token: "{{ api_token }}"
+      when: ocp_host is defined and api_token is defined
+
+    - name: Resolve kubeconfig path for OpenShift API access
+      ansible.builtin.set_fact:
+        sync_playbooks_kubeconfig_path: >-
+          {{
+            lookup('ansible.builtin.env', 'KUBECONFIG')
+            | default(lookup('ansible.builtin.env', 'HOME') ~ '/.kube/config', true)
+          }}
+
+    - name: Check OpenShift kubeconfig file exists
+      ansible.builtin.stat:
+        path: "{{ sync_playbooks_kubeconfig_path }}"
+      register: sync_playbooks_kubeconfig_stat
+      when: ocp_host is not defined or api_token is not defined
+
+    - name: Verify OpenShift API access is configured
+      ansible.builtin.assert:
+        that:
+          - (ocp_host is defined and api_token is defined)
+            or (sync_playbooks_kubeconfig_stat.stat.exists | default(false))
+        fail_msg: >-
+          OpenShift API access is required. Run `oc login` before sync-playbooks,
+          or pass -e ocp_host=<cluster-domain> -e api_token=<openshift-token>.
+
     - name: Discover AAP controller connection facts from OpenShift
       ansible.builtin.include_role:
         name: aap-controller-facts

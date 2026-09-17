@@ -10,6 +10,9 @@
 
 - name: Configure AAP master workflow for Apache Application stack
   block:
+    - name: Ensure Resolve ITSM Change from Request job template exists
+      ansible.builtin.include_tasks: job_templates.yml
+
     - name: Ensure Deploy Apache Application Stack master workflow exists
       ansible.builtin.include_tasks: workflow.yml
   environment:

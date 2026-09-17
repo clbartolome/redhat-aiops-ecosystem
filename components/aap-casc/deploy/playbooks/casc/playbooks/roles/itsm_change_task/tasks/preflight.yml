@@ -8,8 +8,8 @@
       - itsm_ctask_template_name | string | trim | length > 0
     fail_msg: >-
       itsm_change_ref and itsm_ctask_template_name are required when ITSM change task
-      integration is enabled. Launch from Deploy Generic Application Stack with a change ref,
-      or omit itsm_change_ref for standalone workflow runs.
+      integration is enabled. Launch from Deploy Generic Application Stack (change ref is
+      resolved by the workflow), or omit ITSM integration for standalone workflow runs.
 
 - name: Load ITSM API credentials
   ansible.builtin.include_role:

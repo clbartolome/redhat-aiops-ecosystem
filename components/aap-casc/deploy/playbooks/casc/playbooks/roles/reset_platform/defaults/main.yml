@@ -36,3 +36,14 @@ openshift_apache_monitoring_probe_scrape_timeout: 5s
 openshift_apache_monitoring_prometheus_rule_name: apache-http-probes
 reset_apache_alert_clear_retries: 20
 reset_apache_alert_clear_delay: 15
+
+reset_gitops_dest_namespace: "{{ gitops_infrastructure_dest_namespace | default('aiops-demo') }}"
+reset_gitops_app_name: "{{ gitops_infrastructure_app_name | default('infrastructure-vms') }}"
+reset_gitops_app_namespace: "{{ gitops_infrastructure_app_namespace | default('openshift-gitops') }}"
+reset_gitops_sync_wait_retries: 12
+reset_gitops_sync_wait_delay: 10
+reset_gitops_accept_unhealthy: true
+
+reset_aiops_tools_namespace: aiops-tools
+reset_aiops_tools_rollout_wait_retries: 30
+reset_aiops_tools_rollout_wait_delay: 10

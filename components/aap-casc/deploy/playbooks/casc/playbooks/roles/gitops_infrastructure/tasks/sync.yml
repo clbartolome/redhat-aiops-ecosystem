@@ -77,10 +77,14 @@
       gitops_infrastructure_app_status.resources[0].status.sync.status | default('') == 'Synced'
     )
     and (
-      gitops_infrastructure_app_status.resources[0].status.health.status | default('') in ['Healthy', 'Progressing']
+      gitops_infrastructure_accept_unhealthy | default(false) | bool
+      or (
+        gitops_infrastructure_app_status.resources[0].status.health.status | default('') in ['Healthy', 'Progressing']
+      )
     )
-  retries: 30
-  delay: 10
+  retries: "{{ gitops_infrastructure_sync_wait_retries | default(30) }}"
+  delay: "{{ gitops_infrastructure_sync_wait_delay | default(10) }}"
+  when: gitops_infrastructure_sync_wait | default(true) | bool
 
 - name: Display Argo CD sync status
   ansible.builtin.debug:

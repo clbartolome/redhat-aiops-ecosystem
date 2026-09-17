@@ -10,3 +10,7 @@ gitops_infrastructure_dest_namespace: aiops-demo
 gitops_infrastructure_argocd_instance_name: openshift-gitops
 gitops_infrastructure_validate_certs: false
 gitops_infrastructure_gitea_insecure: true
+gitops_infrastructure_sync_wait: true
+gitops_infrastructure_sync_wait_retries: 30
+gitops_infrastructure_sync_wait_delay: 10
+gitops_infrastructure_accept_unhealthy: false

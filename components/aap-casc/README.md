@@ -56,11 +56,23 @@ ansible-galaxy collection install -r collections/requirements.yml
 ansible-playbook playbooks/casc/sync-playbooks.yml
 ```
 
-With the execution environment from the repo root:
+With the execution environment (`ansible-navigator/ansible-navigator.yml` must volume-mount the repository at your checkout path; see `dest` under `execution-environment.volume-mounts`):
 
 ```bash
 cd ansible-navigator
-ansible-navigator run ../components/aap-casc/deploy/playbooks/casc/sync-playbooks.yml -m stdout
+export OPENSHIFT_TOKEN=$(oc whoami --show-token)
+export CLUSTER_DOMAIN=$(oc whoami --show-server | sed 's~https://api\.~~' | sed 's~:.*~~')
+ansible-navigator run ../components/aap-casc/deploy/playbooks/casc/sync-playbooks.yml -m stdout \
+  -e "ocp_host=$CLUSTER_DOMAIN" \
+  -e "api_token=$OPENSHIFT_TOKEN"
+```
+
+Alternative (no repo volume-mount required): run the deploy wrapper so the EE project root is `deploy/`:
+
+```bash
+ansible-navigator run ../components/aap-casc/deploy/run-sync-playbooks.yml -m stdout \
+  -e "ocp_host=$CLUSTER_DOMAIN" \
+  -e "api_token=$OPENSHIFT_TOKEN"
 ```
 
 Optional: limit which Gitea repos are synced (default is **Playbooks** only):

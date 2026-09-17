@@ -9,14 +9,12 @@ itsm_apache_stack_task_template_expose_apache: AAP — Expose application
 itsm_apache_stack_task_template_start_httpd: AAP — Start application services
 
 # Declared on AAP job/workflow templates so workflow node extra_data may pass ITSM vars.
+# itsm_change_ref is resolved once by the master workflow resolve step (set_stats) and passed
+# via node extra_data; do not declare empty itsm_change_ref here.
 aap_itsm_job_template_extra_vars:
-  itsm_change_ref: ""
-  itsm_service_request_ref: ""
   itsm_ctask_template_name: ""
 
 aap_itsm_subworkflow_extra_vars:
-  itsm_change_ref: ""
-  itsm_service_request_ref: ""
   thread_id: ""
 
 # Register ITSM VM Asset must not declare empty cpus/mem/vm_name placeholders — extra vars

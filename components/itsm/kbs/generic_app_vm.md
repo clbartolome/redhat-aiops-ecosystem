@@ -11,12 +11,14 @@ This article describes the procedure to create a Virtual Machine with an applica
 
 ## Procedure
 
-1. Open an ITSM service request using the **Generic-Application-Stack** ITSM template providing the following parameters:
+1. Open and **submit** an ITSM service request using the **Generic-Application-Stack** ITSM template providing the following parameters:
 
     - vm_name: Virtual Machine name
     - cpus: Virtual Machine number of CPUs
     - mem: Amount of memory in GiB
     - app_repo: Git repository in which resides the application code
+
+    Submission creates the linked ITSM change (CHG-*). Do not launch the AAP workflow while the request is still draft.
 
 
 2. Search the workflow job template called "Deploy Generic Application Stack" in Ansible Automation Platform.
@@ -28,9 +30,8 @@ This article describes the procedure to create a Virtual Machine with an applica
     - cpus: Virtual Machine number of CPUs
     - mem: Virtual Machine memory (integer)
     - app_repo: Application Repository
-    - itsm_change_ref: Obtained in the step 1
     - itsm_service_request_ref: Obtained in the step 1
 
 ## Follow up
 
-Keep ITSM service request ID, change ID and relevant launched job ID to follow up the request.
+Keep ITSM service request ID and relevant launched job ID to follow up the request. The workflow resolves the linked ITSM change ID automatically.

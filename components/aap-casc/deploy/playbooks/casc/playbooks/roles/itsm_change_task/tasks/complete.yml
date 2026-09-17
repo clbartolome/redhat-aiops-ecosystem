@@ -2,7 +2,7 @@
 - name: Skip ITSM change task integration when change ref is not provided
   ansible.builtin.set_fact:
     itsm_change_task_enabled: >-
-      {{ itsm_change_ref is defined and itsm_change_ref | string | trim | length > 0 }}
+      {{ itsm_change_ref | default('') | string | trim | length > 0 }}
   when: itsm_change_task_enabled is not defined
 
 - name: Run ITSM change task preflight for completion

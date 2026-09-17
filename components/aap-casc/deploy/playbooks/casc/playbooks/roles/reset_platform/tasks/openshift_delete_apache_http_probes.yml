@@ -48,15 +48,84 @@
     state: present
     definition: "{{ lookup('template', playbook_dir ~ '/templates/openshift_apache_prometheus_rule.yaml.j2') | from_yaml }}"
 
+- name: Resolve OpenShift cluster domain for external Thanos querier URL
+  when: lookup('ansible.builtin.env', 'KUBERNETES_SERVICE_HOST', default='') | trim | length == 0
+  block:
+    - name: Load platform facts for cluster domain when current value is empty
+      when: (openshift_cluster_domain | default('') | regex_replace('^apps\.', '') | trim | length) == 0
+      block:
+        - name: Resolve local platform facts artifact path for cluster domain
+          ansible.builtin.set_fact:
+            reset_openshift_cluster_domain_artifact_file: >-
+              {{ openshift_credential_artifacts_file | default(playbook_dir ~ '/../../../artifacts/aap_platform_facts.yml', true) }}
+
+        - name: Check platform facts artifact exists for cluster domain
+          ansible.builtin.stat:
+            path: "{{ reset_openshift_cluster_domain_artifact_file }}"
+          register: reset_openshift_cluster_domain_artifact_stat
+
+        - name: Load platform facts for cluster domain
+          ansible.builtin.include_vars:
+            file: "{{ reset_openshift_cluster_domain_artifact_file }}"
+          when: reset_openshift_cluster_domain_artifact_stat.stat.exists | default(false)
+
+        - name: Set OpenShift cluster domain from platform facts artifact
+          ansible.builtin.set_fact:
+            openshift_cluster_domain: "apps.{{ aap_platform.openshift.cluster_domain }}"
+          when:
+            - aap_platform is defined
+            - aap_platform.openshift.cluster_domain | default('') | trim | length > 0
+
+    - name: Derive OpenShift cluster domain from Gitea credential hostname
+      ansible.builtin.set_fact:
+        openshift_cluster_domain: >-
+          {{
+            gitea_credential_url
+            | regex_replace('^https?://', '')
+            | regex_replace('/.*', '')
+            | regex_replace('^[^.]+\.', '')
+          }}
+      when:
+        - (openshift_cluster_domain | default('') | regex_replace('^apps\.', '') | trim | length) == 0
+        - gitea_credential_url is defined
+        - gitea_credential_url | string | trim | length > 0
+
+    - name: Derive OpenShift cluster domain from OpenShift API server hostname
+      ansible.builtin.set_fact:
+        openshift_cluster_domain: >-
+          apps.{{
+            (
+              openshift_credential_host
+              | default(lookup('ansible.builtin.env', 'K8S_AUTH_HOST'), true)
+              | default('', true)
+            )
+            | regex_replace('^https?://api\.', '')
+            | regex_replace(':.*', '')
+          }}
+      when:
+        - (openshift_cluster_domain | default('') | regex_replace('^apps\.', '') | trim | length) == 0
+        - (
+            openshift_credential_host | default(lookup('ansible.builtin.env', 'K8S_AUTH_HOST'), true) | default('', true)
+          ) | trim | length > 0
+
+    - name: Fail when OpenShift cluster domain is not configured
+      ansible.builtin.assert:
+        that:
+          - (openshift_cluster_domain | default('') | regex_replace('^apps\.', '') | trim | length) > 0
+        fail_msg: >-
+          openshift_cluster_domain is required to query Thanos when not running inside the cluster.
+          Ensure artifacts/aap_platform_facts.yml defines aap_platform.openshift.cluster_domain,
+          or attach Gitea/OpenShift credentials that expose the cluster apps domain.
+
 - name: Resolve Thanos querier URL for alert clearance check
   ansible.builtin.set_fact:
     reset_thanos_querier_url: >-
       {{
-        (
+        'https://thanos-querier.openshift-monitoring.svc:9091'
+        if (lookup('ansible.builtin.env', 'KUBERNETES_SERVICE_HOST', default='') | trim | length > 0)
+        else (
           'https://thanos-querier-openshift-monitoring.apps.'
-          ~ (
-            openshift_cluster_domain | default(aap_platform.openshift.cluster_domain | default(''))
-          )
+          ~ openshift_cluster_domain
         ) | replace('.apps.apps.', '.apps.')
       }}
 

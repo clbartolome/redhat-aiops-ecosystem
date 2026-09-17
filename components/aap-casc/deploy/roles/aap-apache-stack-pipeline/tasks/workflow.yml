@@ -16,6 +16,20 @@
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
 
+- name: Ensure Resolve ITSM Change workflow node exists
+  awx.awx.workflow_job_template_node:
+    identifier: resolve_itsm_change
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_resolve_itsm_change }}"
+    extra_data:
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+    success_nodes: []
+    state: present
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
 - name: Ensure Deploy Generic App sub-workflow node exists
   awx.awx.workflow_job_template_node:
     identifier: deploy_apache_app_stack
@@ -53,6 +67,21 @@
       cpus: "{{ '{{ cpus }}' }}"
       mem: "{{ '{{ mem }}' }}"
     success_nodes: []
+    state: present
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
+- name: Ensure Resolve ITSM Change workflow node links to Provision VM
+  awx.awx.workflow_job_template_node:
+    identifier: resolve_itsm_change
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_resolve_itsm_change }}"
+    extra_data:
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+    success_nodes:
+      - provision_vm_stack
     state: present
     controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
