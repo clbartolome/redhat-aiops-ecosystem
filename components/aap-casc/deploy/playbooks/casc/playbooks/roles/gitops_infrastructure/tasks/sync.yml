@@ -59,7 +59,7 @@
     definition:
       metadata:
         annotations:
-          argocd.argoproj.io/refresh: hard
+          argocd.argoproj.io/refresh: "{{ gitops_infrastructure_refresh_mode | default('hard') }}"
 
 - name: Wait for Argo CD Application to reach Synced and Healthy state
   kubernetes.core.k8s_info:

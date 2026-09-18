@@ -31,6 +31,15 @@
         | length > 0
       }}
 
+- name: Skip VM restart when configured service port is already active on the running VMI
+  ansible.builtin.debug:
+    msg: >-
+      VMI {{ apache_exposure_vm_name }} already exposes port {{ apache_exposure_service_port }};
+      skipping restart.
+  when:
+    - apache_exposure_skip_vm_restart_when_port_present | default(true) | bool
+    - apache_exposure_vmi_has_service_port | bool
+
 - name: Restart VM when configured service port is not active on the running VMI
   when: not apache_exposure_vmi_has_service_port | bool
   block:

@@ -8,13 +8,13 @@
   vars:
     aap_controller_token_fact_name: aap_httpd_pipeline_controller_oauthtoken
 
-- name: Configure AAP job templates and workflow for Apache deployment
+- name: Configure AAP job templates for Generic Application stack nodes
   block:
-    - name: Ensure Apache deployment job templates exist
-      ansible.builtin.include_tasks: job_templates.yml
+    - name: Remove legacy httpd pipeline job templates and workflows from AAP
+      ansible.builtin.include_tasks: remove_legacy.yml
 
-    - name: Ensure Deploy Apache App workflow exists
-      ansible.builtin.include_tasks: workflow.yml
+    - name: Ensure Generic Application stack job templates exist
+      ansible.builtin.include_tasks: job_templates.yml
   environment:
     CONTROLLER_OPTIONAL_API_URLPATTERN_PREFIX: "{{ aap_httpd_pipeline_controller_api_prefix }}"
 
@@ -24,5 +24,6 @@
       - "Organization: {{ aap_httpd_pipeline_organization }}"
       - "Project: {{ aap_httpd_pipeline_project }}"
       - "Inventory: {{ aap_httpd_pipeline_inventory }} (ITSM Assets SCM source; populated after VM registration)"
-      - "Job templates: {{ aap_httpd_pipeline_jt_install }}, {{ aap_httpd_pipeline_jt_deploy }}, {{ aap_httpd_pipeline_jt_expose }}, {{ aap_httpd_pipeline_jt_register_itsm }}, {{ aap_httpd_pipeline_jt_start }}"
-      - "Workflow: {{ aap_httpd_pipeline_workflow }}"
+      - >-
+        Job templates: {{ aap_httpd_pipeline_jt_configure }}, {{ aap_httpd_pipeline_jt_expose }},
+        {{ aap_httpd_pipeline_jt_register_itsm }}, {{ aap_httpd_pipeline_jt_complete_stack }}

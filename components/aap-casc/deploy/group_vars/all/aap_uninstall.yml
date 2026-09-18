@@ -3,6 +3,8 @@ uninstall_remove_aap: true
 uninstall_aap_remove_credential_types: true
 uninstall_remove_aiops_demo_namespace: true
 uninstall_remove_aap_openshift_sa: true
+# Keep EDA decision environments, projects, and activations across demo resets.
+aap_uninstall_remove_eda_resources: false
 
 aap_uninstall_organization: AIOps
 aap_uninstall_validate_certs: "{{ aap_casc.validate_certs | default(false) | bool }}"
@@ -11,10 +13,6 @@ aap_uninstall_credential_type_chat: Chat App
 aap_uninstall_credential_type_gitea: Gitea
 aap_uninstall_credential_type_gitops: Openshift Gitops
 aap_uninstall_credential_type_itsm: Itsm App
-
-aap_uninstall_legacy_jt_deploy_apache_app: Deploy Apache App
-aap_uninstall_legacy_apache_stack_workflows: []
-aap_uninstall_legacy_apache_stack_job_templates: []
 
 aap_uninstall_credentials:
   - name: "{{ aap_casc_credential_openshift }}"
@@ -37,3 +35,31 @@ aap_uninstall_credentials:
     credential_type: Machine
   - name: "{{ aap_vm_pipeline_credential_gitea_scm }}"
     credential_type: Source Control
+
+aap_uninstall_legacy_workflows:
+  - Provision VM
+  - Deploy Generic App
+  - Lightspeed Remediation
+  - Modify VM CPU
+  - Modify VM Memory
+
+aap_uninstall_legacy_job_templates:
+  - Push VM Manifest
+  - Sync Infrastructure VMs
+  - Install application packages
+  - Deploy application repository
+  - Start application services
+  - Upload Lightspeed Remediation Playbook
+  - Sync AAP Playbooks Project
+  - Create Lightspeed Remediation Job Template
+  - Launch Lightspeed Remediation Job Template
+  - Close Lightspeed Remediation Incident
+  - Patch VM manifest (CPU)
+  - Patch VM manifest (Memory)
+  - Restart VM
+
+# EDA object names come from aap_eda_pipeline.yml and aap_eda_itsm_webhook_pipeline.yml.
+# Keep legacy activation names here so uninstall still cleans up older demo deployments.
+aap_uninstall_eda_legacy_activation_names:
+  - Apache Alert Incidents
+  - ITSM App Chat Notifications

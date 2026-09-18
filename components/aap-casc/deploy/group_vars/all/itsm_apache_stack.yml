@@ -8,14 +8,22 @@ itsm_apache_stack_task_template_deploy_app: AAP — Deploy application repositor
 itsm_apache_stack_task_template_expose_apache: AAP — Expose application
 itsm_apache_stack_task_template_start_httpd: AAP — Start application services
 
+itsm_change_task_track_milestones_only: true
+itsm_change_task_milestone_ctask_titles:
+  - "{{ itsm_apache_stack_task_template_sync_vms }}"
+  - "{{ itsm_apache_stack_task_template_expose_apache }}"
+  - "{{ itsm_apache_stack_task_template_start_httpd }}"
+
+# Optional ITSM asset type id cache (set after ITSM install to skip GET /asset-types).
+itsm_vm_asset_type_id_cache: ""
+itsm_apache_app_asset_type_id_cache: ""
+
 # Declared on AAP job/workflow templates so workflow node extra_data may pass ITSM vars.
 # itsm_change_ref is resolved once by the master workflow resolve step (set_stats) and passed
 # via node extra_data; do not declare empty itsm_change_ref here.
-aap_itsm_job_template_extra_vars:
-  itsm_ctask_template_name: ""
-
-aap_itsm_subworkflow_extra_vars:
-  thread_id: ""
+# Do not declare empty itsm_ctask_template_name — AAP extra_vars override import_role vars and
+# disable milestone ITSM integration on nodes that pass the CTASK name only via the playbook.
+aap_itsm_job_template_extra_vars: {}
 
 # Register ITSM VM Asset must not declare empty cpus/mem/vm_name placeholders — extra vars
 # cannot be overridden by set_fact, which breaks ITSM/cluster lookup during modification flows.

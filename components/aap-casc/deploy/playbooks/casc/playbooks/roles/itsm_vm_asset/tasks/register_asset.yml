@@ -1,4 +1,9 @@
 ---
+- name: Seed Virtual Machine asset type id from cache when configured
+  ansible.builtin.set_fact:
+    itsm_vm_asset_type_id: "{{ itsm_vm_asset_type_id_cache | int }}"
+  when: itsm_vm_asset_type_id_cache | default('') | string | trim | length > 0
+
 - name: GET ITSM asset types
   ansible.builtin.uri:
     url: "{{ itsm_api_base_url }}/api/v1/asset-types"
@@ -12,6 +17,7 @@
     headers:
       Accept: application/json
   register: itsm_vm_asset_types_list
+  when: itsm_vm_asset_type_id is not defined
 
 - name: Resolve Virtual Machine asset type id
   ansible.builtin.set_fact:
@@ -26,6 +32,7 @@
           | default({})
         ).id | default(none)
       }}
+  when: itsm_vm_asset_type_id is not defined
 
 - name: Fail when Virtual Machine asset type is missing in ITSM
   ansible.builtin.fail:
@@ -36,7 +43,8 @@
 
 - name: GET existing ITSM assets
   ansible.builtin.uri:
-    url: "{{ itsm_api_base_url }}/api/v1/assets"
+    url: >-
+      {{ itsm_api_base_url }}/api/v1/assets?name={{ vm_name | urlencode }}
     method: GET
     force_basic_auth: true
     url_username: "{{ itsm_api_user }}"
@@ -76,8 +84,8 @@
   ansible.builtin.set_fact:
     itsm_vm_asset_custom_fields:
       hostname: "{{ vm_name }}"
-      ip_address: "{{ itsm_vm_asset_ip }}"
-      ansible_host: "{{ itsm_vm_asset_ansible_host }}"
+      ip_address: "{{ _itsm_vm_asset_discovered_ip }}"
+      ansible_host: "{{ _itsm_vm_asset_discovered_ansible_host }}"
       cpus: "{{ vm_asset_resolved_cpus | int }}"
       memory: "{{ vm_asset_resolved_mem | int }}"
 
@@ -92,7 +100,7 @@
     body_format: json
     body:
       name: "{{ vm_name }}"
-      description: "IP: {{ itsm_vm_asset_ip }}"
+      description: "IP: {{ _itsm_vm_asset_discovered_ip }}"
       external_inventory: true
       asset_type_id: "{{ itsm_vm_asset_type_id | int }}"
       custom_fields: "{{ itsm_vm_asset_custom_fields }}"
@@ -114,7 +122,7 @@
     validate_certs: "{{ itsm_validate_certs | default(false) }}"
     body_format: json
     body:
-      description: "IP: {{ itsm_vm_asset_ip }}"
+      description: "IP: {{ _itsm_vm_asset_discovered_ip }}"
       custom_fields: "{{ itsm_vm_asset_custom_fields }}"
     status_code: [200]
     return_content: true
@@ -128,7 +136,7 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        'Created ITSM asset ' ~ vm_name ~ ' (' ~ itsm_vm_asset_ip ~ ')'
+        'Created ITSM asset ' ~ vm_name ~ ' (' ~ _itsm_vm_asset_discovered_ip ~ ')'
         if not itsm_vm_asset_already_exists | bool
-        else 'Updated ITSM asset ' ~ vm_name ~ ' (' ~ itsm_vm_asset_ip ~ ')'
+        else 'Updated ITSM asset ' ~ vm_name ~ ' (' ~ _itsm_vm_asset_discovered_ip ~ ')'
       }}

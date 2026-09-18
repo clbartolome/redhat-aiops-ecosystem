@@ -1,5 +1,5 @@
 ---
-- name: Configure AAP Apache httpd deployment workflow
+- name: Configure AAP Generic Application stack job templates
   hosts: localhost
   gather_facts: false
   vars_files:
@@ -15,6 +15,6 @@
       ansible.builtin.include_role:
         name: aap-platform-facts
 
-    - name: Refresh AAP Apache httpd deployment workflow
+    - name: Refresh AAP Generic Application stack job templates
       ansible.builtin.include_role:
         name: aap-httpd-pipeline

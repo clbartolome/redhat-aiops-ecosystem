@@ -22,6 +22,10 @@ apache_app_git_package: git
 apache_app_service: httpd
 apache_app_default_branch: main
 apache_app_validate_certs: false
+vm_ssh_username: fedora
+apache_app_ssh_wait_timeout: 300
+apache_app_ssh_wait_delay: 5
+apache_app_ssh_wait_sleep: 5
 
 apache_exposure_route_wait_retries: 30
 apache_exposure_route_wait_delay: 10
@@ -40,9 +44,6 @@ chat_aiops_channel_name: operations
 # Post remediation summary as a thread info message on the chat agent thread (POST /threads/{thread_id}/info).
 # Requires thread_id from AAP MCP when the job is launched from chat.
 apache_troubleshoot_post_chat_summary: true
-
-# Post VM modification completion as a thread info message on the chat agent thread.
-vm_modification_post_chat_summary: false
 
 # Post Generic Application stack deployment completion as a thread info message on the chat agent thread.
 # Requires thread_id from AAP MCP when the job is launched from chat.

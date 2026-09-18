@@ -20,7 +20,7 @@
       - itsm_app_git_commit | string | trim | length > 0
     fail_msg: >-
       vm_name (or target_host), app_repo, and itsm_app_git_commit are required to register the Apache
-      Application ITSM asset (run after Deploy Apache App Repo completes the git clone).
+      Application ITSM asset (run after Deploy application repository completes the git clone).
 
 - name: Normalize Apache Application repository fields
   ansible.builtin.set_fact:

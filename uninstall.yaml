@@ -5,17 +5,13 @@
 
   tasks:
 
-    - name: Setup kubeconfig file
-      ansible.builtin.include_role:
-        name: demos.utils.kubeconfig
+    - name: Ensure OpenShift API access is available
+      ansible.builtin.include_tasks:
+        file: components/aap-casc/deploy/playbooks/casc/tasks/ensure_openshift_access.yml
 
     - name: Uninstall AAP CASC
       ansible.builtin.include_tasks:
-        file: components/aap-casc/uninstall.yaml
-
-    - name: Uninstall AAP EDA
-      ansible.builtin.include_tasks:
-        file: components/aap-eda/uninstall.yaml
+        file: components/aap-casc/deploy/playbooks/casc/uninstall-tasks.yml
 
     - name: Uninstall monitor
       ansible.builtin.include_tasks:
@@ -40,14 +36,6 @@
     - name: Uninstall ITSM
       ansible.builtin.include_tasks:
         file: components/itsm/uninstall.yaml
-
-    - name: Uninstall AAP MCP
-      ansible.builtin.include_tasks:
-        file: components/aap-mcp/uninstall.yaml
-
-    - name: Uninstall OpenShift MCP
-      ansible.builtin.include_tasks:
-        file: components/openshift-mcp/uninstall.yaml
 
   vars_files:
     - vars.yaml

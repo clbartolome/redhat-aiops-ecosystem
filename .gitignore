@@ -23,5 +23,6 @@ kubeconfig.*
 #Other files
 
 **/install-artifact*.json
+**/uninstall-artifact*.json
 
 ansible-navigator.log

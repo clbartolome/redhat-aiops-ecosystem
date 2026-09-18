@@ -63,6 +63,8 @@ ansible-navigator run ../install.yaml -m stdout \
 
 ### Clean-up
 
+Uninstall removes the demo workloads (AAP CASC, ITSM, observability, agent, and so on) but **keeps** Event-Driven Ansible, AAP MCP, and OpenShift MCP. Re-running install skips those components when they are already running; `install.yml` CASC configure still ensures EDA decision environments, projects, and activations exist.
+
 - Open a terminal
 - Login into OpenShift
 - Access installation->ansible-navigator: `cd ansible-navigator`

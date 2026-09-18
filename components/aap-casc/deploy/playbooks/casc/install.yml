@@ -42,22 +42,17 @@
       vars:
         gitops_infrastructure_dest_namespace: "{{ aap_platform.virtualization.vm_namespace }}"
 
-    - name: Configure AAP VM provisioning workflow
+    - name: Configure AAP VM stack job templates and inventories
       ansible.builtin.include_role:
         name: aap-vm-pipeline
 
-    - name: Configure AAP Apache httpd deployment workflow
+    - name: Configure AAP Generic Application stack job templates
       ansible.builtin.include_role:
         name: aap-httpd-pipeline
 
-    - name: Configure AAP Apache alert remediation job templates
+    - name: Configure AAP Apache troubleshoot job templates
       ansible.builtin.include_role:
         name: aap-apache-troubleshoot-pipeline
-      when: aap_casc_enable_observability_pipelines | bool
-
-    - name: Configure AAP Lightspeed Remediation workflow
-      ansible.builtin.include_role:
-        name: aap-lightspeed-remediation-pipeline
       when: aap_casc_enable_observability_pipelines | bool
 
     - name: Configure Event-Driven Ansible Apache alert pipeline
@@ -84,13 +79,9 @@
         - aap_casc_enable_observability_pipelines | bool
         - aap_casc_itsm_chat_webhook_delivery == 'eda'
 
-    - name: Configure AAP Deploy Apache Application Stack master workflow
+    - name: Configure AAP Deploy Generic Application Stack master workflow
       ansible.builtin.include_role:
         name: aap-apache-stack-pipeline
-
-    - name: Configure AAP VM modification workflows
-      ansible.builtin.include_role:
-        name: aap-vm-modification-pipeline
 
     - name: Configure AAP Reset job template
       ansible.builtin.include_role:

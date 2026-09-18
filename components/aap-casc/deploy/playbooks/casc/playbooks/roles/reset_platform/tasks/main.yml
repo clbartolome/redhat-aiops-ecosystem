@@ -9,17 +9,6 @@
   tags:
     - itsm
 
-- name: Remove Gitea remediation playbooks
-  ansible.builtin.include_tasks: gitea_cleanup_directory.yml
-  vars:
-    reset_gitea_cleanup_repo: "{{ reset_gitea_playbooks_repo }}"
-    reset_gitea_cleanup_path: "{{ reset_gitea_remediations_path }}"
-    reset_gitea_cleanup_patterns: "*.yml"
-    reset_gitea_cleanup_commit_message: Reset demo remediations
-    reset_gitea_cleanup_workdir: "{{ reset_gitea_workdir }}-playbooks"
-  tags:
-    - gitea_remediations
-
 - name: Remove Gitea VM manifests
   ansible.builtin.include_tasks: gitea_cleanup_directory.yml
   vars:
@@ -68,11 +57,6 @@
   tags:
     - openshift
     - aiops_tools
-
-- name: Delete ephemeral Lightspeed remediation job templates
-  ansible.builtin.include_tasks: aap_delete_ephemeral_remediation_jts.yml
-  tags:
-    - aap_jts
 
 # - name: Clear operations channel chat history
 #   ansible.builtin.include_tasks: chat_clear_operations_channel.yml

@@ -6,6 +6,10 @@
     - ../../../../../vars.yaml
 
   tasks:
+    - name: Ensure OpenShift API access is available
+      ansible.builtin.include_tasks:
+        file: tasks/ensure_openshift_access.yml
+
     - name: Run AAP CASC uninstall tasks
       ansible.builtin.include_tasks:
-        file: "{{ playbook_dir }}/../../../uninstall.yaml"
+        file: uninstall-tasks.yml

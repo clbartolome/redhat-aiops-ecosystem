@@ -1,5 +1,6 @@
 ---
 - name: GET ITSM change detail for CTASK resolution
+  when: itsm_change_task_change_detail is not defined
   ansible.builtin.uri:
     url: "{{ itsm_api_base_url | regex_replace('/$', '') }}/api/v1/changes/{{ itsm_change_ref | urlencode }}"
     method: GET

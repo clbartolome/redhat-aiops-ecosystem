@@ -33,7 +33,7 @@ spec:
               ports:
                 - port: 22
                   protocol: TCP
-                - port: 80
+                - port: {{ vm_manifest_service_port | default(80) }}
                   protocol: TCP
             - name: {{ vm_udn_pod_interface }}
               bridge: {}
@@ -76,3 +76,31 @@ spec:
             source:
               secret:
                 secretName: {{ ssh_secret_name }}
+{% if vm_manifest_route_host is defined and vm_manifest_route_host | string | trim | length > 0 %}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ vm_manifest_service_name }}
+  namespace: {{ vm_namespace }}
+spec:
+  selector:
+    vm.kubevirt.io/name: {{ vm_name }}
+  ports:
+    - port: {{ vm_manifest_service_port | default(80) }}
+      targetPort: {{ vm_manifest_service_port | default(80) }}
+      protocol: TCP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ vm_manifest_route_name }}
+  namespace: {{ vm_namespace }}
+spec:
+  host: {{ vm_manifest_route_host }}
+  to:
+    kind: Service
+    name: {{ vm_manifest_service_name }}
+  port:
+    targetPort: {{ vm_manifest_service_port | default(80) }}
+{% endif %}

@@ -29,6 +29,7 @@
   block:
     - name: Remove EDA resources for Apache alert pipeline
       ansible.builtin.include_tasks: eda_resources.yml
+      when: aap_uninstall_remove_eda_resources | default(false) | bool
 
     - name: Remove workflow job templates
       ansible.builtin.include_tasks: workflows.yml
@@ -64,6 +65,13 @@
   environment:
     CONTROLLER_OPTIONAL_API_URLPATTERN_PREFIX: "{{ aap_uninstall_controller_api_prefix }}"
 
+- name: Remove orphaned controller resources without organization
+  block:
+    - name: Remove orphaned controller resources
+      ansible.builtin.include_tasks: orphaned_resources.yml
+  environment:
+    CONTROLLER_OPTIONAL_API_URLPATTERN_PREFIX: "{{ aap_uninstall_controller_api_prefix }}"
+
 - name: Display AAP uninstall summary
   ansible.builtin.debug:
     msg:
@@ -71,9 +79,8 @@
         AIOps organization:
         {{ 'removed' if aap_uninstall_org_present | bool else 'not found (already absent)' }}
       - >-
-        Removed workflows: {{ aap_apache_stack_pipeline_workflow }}, {{ aap_httpd_pipeline_workflow }},
-        {{ aap_vm_pipeline_workflow }}, {{ aap_vm_cpu_modification_pipeline_workflow }},
-        {{ aap_vm_memory_modification_pipeline_workflow }}
+        Removed workflows: {{ aap_apache_stack_pipeline_workflow }}
+        and legacy workflows {{ aap_uninstall_legacy_workflows | join(', ') }}
       - "Removed project: {{ aap_vm_pipeline_project }}"
       - "Removed inventories: {{ aap_vm_pipeline_inventory }}, {{ aap_vm_pipeline_infrastructure_inventory }}"
       - >-
@@ -89,3 +96,6 @@
           ~ aap_uninstall_credential_type_gitops ~ ', ' ~ aap_uninstall_credential_type_itsm,
           'skipped'
         ) }}
+      - >-
+        EDA decision environments, projects, and activations:
+        {{ 'removed' if aap_uninstall_remove_eda_resources | default(false) | bool else 'kept' }}

@@ -18,6 +18,17 @@
     state: directory
     mode: "0750"
 
+- name: Resolve Apache exposure port for initial VM manifest
+  ansible.builtin.set_fact:
+    vm_manifest_service_port: "{{ (apache_exposure_service_port | default(80)) | int }}"
+
+- name: Derive Apache Service and Route naming for initial VM manifest
+  ansible.builtin.set_fact:
+    vm_manifest_service_name: "{{ vm_name }}-http"
+    vm_manifest_route_name: "{{ vm_name }}-http"
+    vm_manifest_route_host: "{{ vm_name }}-http.{{ openshift_cluster_domain }}"
+  when: openshift_cluster_domain | default('') | string | trim | length > 0
+
 - name: Render VM manifest from template
   ansible.builtin.template:
     src: "{{ vm_manifest_template_file | default(playbook_dir ~ '/templates/vm_template.yaml.j2') }}"

@@ -93,6 +93,13 @@
       delegate_to: localhost
       delegate_facts: true
 
+    - name: Publish application git commit to workflow artifacts
+      ansible.builtin.set_stats:
+        data:
+          itsm_app_git_commit: "{{ apache_app_git_head.stdout | trim }}"
+      delegate_to: localhost
+      when: apache_app_publish_workflow_artifacts | default(true) | bool
+
   rescue:
     - name: Report application repository clone failure
       ansible.builtin.fail:

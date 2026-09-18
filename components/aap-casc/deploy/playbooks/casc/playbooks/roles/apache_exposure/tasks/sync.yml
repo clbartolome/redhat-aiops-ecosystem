@@ -3,3 +3,6 @@
   ansible.builtin.include_role:
     name: gitops_infrastructure
     tasks_from: sync.yml
+  vars:
+    gitops_infrastructure_refresh_mode: normal
+    gitops_infrastructure_accept_unhealthy: true

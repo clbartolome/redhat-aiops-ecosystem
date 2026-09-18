@@ -1,7 +1,4 @@
 ---
-- name: Ensure sub-workflows allow ITSM variables from master workflow nodes
-  ansible.builtin.include_tasks: ensure_subworkflows.yml
-
 - name: Ensure Deploy Generic Application Stack master workflow exists in AAP
   awx.awx.workflow_job_template:
     name: "{{ aap_apache_stack_pipeline_workflow }}"
@@ -16,37 +13,141 @@
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
 
-- name: Ensure Resolve ITSM Change workflow node exists
+- name: Remove legacy Deploy Generic App sub-workflow node from master workflow
   awx.awx.workflow_job_template_node:
-    identifier: resolve_itsm_change
+    identifier: deploy_apache_app_stack
     workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
     organization: "{{ aap_apache_stack_pipeline_organization }}"
-    unified_job_template: "{{ aap_apache_stack_pipeline_jt_resolve_itsm_change }}"
+    state: absent
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
+- name: Ensure Complete Generic App Stack workflow node exists
+  awx.awx.workflow_job_template_node:
+    identifier: complete_generic_app_stack
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_complete_stack }}"
     extra_data:
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
+      thread_id: "{{ '{{ thread_id | default(\"\") }}' }}"
+      itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_start_httpd }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
     success_nodes: []
     state: present
     controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
 
-- name: Ensure Deploy Generic App sub-workflow node exists
+- name: Ensure Register ITSM Generic Application Asset workflow node exists
   awx.awx.workflow_job_template_node:
-    identifier: deploy_apache_app_stack
+    identifier: register_itsm_apache_app_asset
     workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
     organization: "{{ aap_apache_stack_pipeline_organization }}"
-    unified_job_template: "{{ aap_apache_stack_pipeline_httpd_subworkflow }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_register_app }}"
     extra_data:
       itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
-      thread_id: "{{ '{{ thread_id | default(\"\") }}' }}"
-      target_host: "{{ '{{ vm_name }}' }}"
       vm_name: "{{ '{{ vm_name }}' }}"
+      target_host: "{{ '{{ vm_name }}' }}"
+      app_repo: "{{ '{{ app_repo }}' }}"
+      app_branch: "{{ '{{ app_branch | default(\"main\") }}' }}"
+      itsm_app_git_commit: "{{ '{{ itsm_app_git_commit | default(\"\") }}' }}"
+      apache_app_rpm_packages: "{{ '{{ apache_app_rpm_packages | default(\"httpd,git\") }}' }}"
+      apache_app_docroot: "{{ '{{ apache_app_docroot | default(\"/var/www/html\") }}' }}"
+      apache_app_enabled_services: "{{ '{{ apache_app_enabled_services | default(\"httpd\") }}' }}"
+      apache_exposure_service_port: "{{ '{{ apache_exposure_service_port | default(\"80\") }}' }}"
+    success_nodes:
+      - complete_generic_app_stack
+    state: present
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
+- name: Ensure Expose application workflow node exists
+  awx.awx.workflow_job_template_node:
+    identifier: expose_apache
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_expose }}"
+    extra_data:
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
+      itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_expose_apache }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
+      target_host: "{{ '{{ vm_name }}' }}"
       app_repo: "{{ '{{ app_repo }}' }}"
       app_branch: "{{ '{{ app_branch | default(\"main\") }}' }}"
       apache_app_rpm_packages: "{{ '{{ apache_app_rpm_packages | default(\"httpd,git\") }}' }}"
       apache_app_docroot: "{{ '{{ apache_app_docroot | default(\"/var/www/html\") }}' }}"
       apache_app_enabled_services: "{{ '{{ apache_app_enabled_services | default(\"httpd\") }}' }}"
+      apache_exposure_service_port: "{{ '{{ apache_exposure_service_port | default(\"80\") }}' }}"
+    success_nodes:
+      - complete_generic_app_stack
+    state: present
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
+- name: Ensure Configure Generic App workflow node exists
+  awx.awx.workflow_job_template_node:
+    identifier: configure_generic_app
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_configure_app }}"
+    extra_data:
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
+      target_host: "{{ '{{ vm_name }}' }}"
+      app_repo: "{{ '{{ app_repo }}' }}"
+      app_branch: "{{ '{{ app_branch | default(\"main\") }}' }}"
+      apache_app_rpm_packages: "{{ '{{ apache_app_rpm_packages | default(\"httpd,git\") }}' }}"
+      apache_app_docroot: "{{ '{{ apache_app_docroot | default(\"/var/www/html\") }}' }}"
+      apache_app_enabled_services: "{{ '{{ apache_app_enabled_services | default(\"httpd\") }}' }}"
+      apache_exposure_service_port: "{{ '{{ apache_exposure_service_port | default(\"80\") }}' }}"
+    success_nodes:
+      - expose_apache
+      - register_itsm_apache_app_asset
+    state: present
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
+- name: Ensure Register ITSM VM Asset workflow node exists
+  awx.awx.workflow_job_template_node:
+    identifier: register_itsm_vm_asset
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_register_vm }}"
+    extra_data:
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
+      cpus: "{{ '{{ cpus }}' }}"
+      mem: "{{ '{{ mem }}' }}"
+    success_nodes:
+      - configure_generic_app
+    state: present
+    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
+
+- name: Clear Provision VM Stack workflow node edges before re-linking
+  awx.awx.workflow_job_template_node:
+    identifier: provision_vm_stack
+    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
+    organization: "{{ aap_apache_stack_pipeline_organization }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_provision_vm }}"
+    extra_data:
+      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
+      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_sync_vms }}"
+      vm_name: "{{ '{{ vm_name }}' }}"
+      cpus: "{{ '{{ cpus }}' }}"
+      mem: "{{ '{{ mem }}' }}"
       apache_exposure_service_port: "{{ '{{ apache_exposure_service_port | default(\"80\") }}' }}"
     success_nodes: []
     state: present
@@ -54,25 +155,7 @@
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
 
-- name: Clear Provision VM sub-workflow node edges before re-linking
-  awx.awx.workflow_job_template_node:
-    identifier: provision_vm_stack
-    workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
-    organization: "{{ aap_apache_stack_pipeline_organization }}"
-    unified_job_template: "{{ aap_apache_stack_pipeline_vm_subworkflow }}"
-    extra_data:
-      itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
-      itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
-      vm_name: "{{ '{{ vm_name }}' }}"
-      cpus: "{{ '{{ cpus }}' }}"
-      mem: "{{ '{{ mem }}' }}"
-    success_nodes: []
-    state: present
-    controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
-    controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
-    validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
-
-- name: Ensure Resolve ITSM Change workflow node links to Provision VM
+- name: Ensure Resolve ITSM Change workflow node exists
   awx.awx.workflow_job_template_node:
     identifier: resolve_itsm_change
     workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
@@ -87,20 +170,22 @@
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_apache_stack_pipeline_validate_certs }}"
 
-- name: Ensure Provision VM sub-workflow node links to Deploy Generic App
+- name: Ensure Provision VM Stack workflow node links to Register ITSM VM Asset
   awx.awx.workflow_job_template_node:
     identifier: provision_vm_stack
     workflow_job_template: "{{ aap_apache_stack_pipeline_workflow }}"
     organization: "{{ aap_apache_stack_pipeline_organization }}"
-    unified_job_template: "{{ aap_apache_stack_pipeline_vm_subworkflow }}"
+    unified_job_template: "{{ aap_apache_stack_pipeline_jt_provision_vm }}"
     extra_data:
       itsm_change_ref: "{{ '{{ itsm_change_ref }}' }}"
       itsm_service_request_ref: "{{ '{{ itsm_service_request_ref | default(\"\") }}' }}"
+      itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_sync_vms }}"
       vm_name: "{{ '{{ vm_name }}' }}"
       cpus: "{{ '{{ cpus }}' }}"
       mem: "{{ '{{ mem }}' }}"
+      apache_exposure_service_port: "{{ '{{ apache_exposure_service_port | default(\"80\") }}' }}"
     success_nodes:
-      - deploy_apache_app_stack
+      - register_itsm_vm_asset
     state: present
     controller_host: "{{ aap_apache_stack_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_apache_stack_pipeline_controller_oauthtoken }}"

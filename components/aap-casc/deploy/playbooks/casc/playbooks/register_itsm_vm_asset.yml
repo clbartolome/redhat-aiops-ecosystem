@@ -5,47 +5,6 @@
   vars_files:
     - defaults/main.yml
   tasks:
-    - name: Start ITSM change task tracking
-      ansible.builtin.import_role:
-        name: itsm_change_task
-        tasks_from: start.yml
-
     - name: Register VM asset and sync infrastructure inventory
-      ansible.builtin.import_role:
+      ansible.builtin.include_role:
         name: itsm_vm_asset
-
-    - name: Complete ITSM change task tracking
-      ansible.builtin.import_role:
-        name: itsm_change_task
-        tasks_from: complete.yml
-
-    - name: Load chat-app credentials for VM modification completion post
-      ansible.builtin.include_role:
-        name: common
-        tasks_from: load_chat_credential.yml
-      when:
-        - vm_modification_post_chat_summary | default(false) | bool
-        - itsm_service_request_ref is defined
-        - itsm_service_request_ref | string | trim | length > 0
-        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length > 0
-
-    - name: Post VM modification completion to chat agent thread
-      ansible.builtin.include_role:
-        name: common
-        tasks_from: post_chat_request_completion.yml
-      when:
-        - vm_modification_post_chat_summary | default(false) | bool
-        - itsm_service_request_ref is defined
-        - itsm_service_request_ref | string | trim | length > 0
-        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length > 0
-
-    - name: Skip chat notification when agent thread id is unavailable
-      ansible.builtin.debug:
-        msg: >-
-          thread_id is missing; skipping request completion post to chat.
-          Launch the VM modification workflow from the chat agent thread so thread_id is injected.
-      when:
-        - vm_modification_post_chat_summary | default(false) | bool
-        - itsm_service_request_ref is defined
-        - itsm_service_request_ref | string | trim | length > 0
-        - (thread_id | default(chat_thread_id | default(''), true)) | string | trim | length == 0

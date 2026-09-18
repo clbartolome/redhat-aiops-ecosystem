@@ -22,7 +22,6 @@ reset_chat_channel: operations
 reset_gitea_infrastructure_repo: Infrastructure
 reset_gitea_infrastructure_path: vms
 reset_gitea_playbooks_repo: Playbooks
-reset_gitea_remediations_path: remediations
 reset_gitea_branch: main
 reset_gitea_git_user_name: aiops-automation
 reset_gitea_git_user_email: aiops@example.com
@@ -31,7 +30,6 @@ reset_gitea_internal_host: gitea-http.gitea.svc.cluster.local:3000
 reset_gitea_use_internal: >-
   {{ lookup('ansible.builtin.env', 'KUBERNETES_SERVICE_HOST', default='') | trim | length > 0 }}
 
-reset_lightspeed_jt_name_prefix: "Lightspeed Remediation - "
 reset_aap_cleanup_job_name: Cleanup Job Details
 reset_aap_cleanup_days: 0
 

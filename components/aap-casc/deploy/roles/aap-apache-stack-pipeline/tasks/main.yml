@@ -23,4 +23,6 @@
     msg:
       - "Organization: {{ aap_apache_stack_pipeline_organization }}"
       - "Master workflow: {{ aap_apache_stack_pipeline_workflow }}"
-      - "Sub-workflows: {{ aap_apache_stack_pipeline_vm_subworkflow }} → {{ aap_apache_stack_pipeline_httpd_subworkflow }}"
+      - >-
+        Master workflow nodes: Resolve ITSM Change → Provision VM Stack → Register ITSM VM Asset
+        → Configure Generic App → (Expose application ∥ Register ITSM App) → Complete Generic App Stack

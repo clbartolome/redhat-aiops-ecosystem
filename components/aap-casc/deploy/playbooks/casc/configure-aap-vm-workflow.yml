@@ -1,5 +1,5 @@
 ---
-- name: Configure AAP VM provisioning workflow
+- name: Configure AAP VM stack job templates and inventories
   hosts: localhost
   gather_facts: false
   vars_files:
@@ -11,6 +11,6 @@
       ansible.builtin.include_role:
         name: aap-platform-facts
 
-    - name: Refresh AAP Provision VM workflow
+    - name: Refresh AAP VM stack job templates
       ansible.builtin.include_role:
         name: aap-vm-pipeline

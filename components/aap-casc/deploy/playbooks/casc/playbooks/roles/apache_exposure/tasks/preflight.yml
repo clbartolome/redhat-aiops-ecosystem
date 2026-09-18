@@ -13,7 +13,7 @@
     that:
       - apache_exposure_vm_name | string | trim | length > 0
     fail_msg: >-
-      vm_name or target_host is required to expose Apache. Launch from Deploy Apache App workflow
+      vm_name or target_host is required to expose Apache. Launch from Deploy Generic App workflow
       with vm_name set, or pass -e vm_name=<vm_hostname>.
 
 - name: Load Gitea connection facts from AAP credential or local artifact

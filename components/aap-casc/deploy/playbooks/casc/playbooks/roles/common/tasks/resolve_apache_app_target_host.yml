@@ -8,8 +8,23 @@
         else target_host | string | trim
       }}
 
+- name: Resolve Ansible SSH host from workflow artifact or extra var
+  ansible.builtin.set_fact:
+    apache_app_resolved_ansible_host: >-
+      {{
+        itsm_vm_asset_ansible_host | default(apache_troubleshoot_ansible_host | default(''), true)
+        | string
+        | trim
+      }}
+
 - name: Add resolved VM to in-memory inventory for Apache stack jobs
   ansible.builtin.add_host:
     name: "{{ apache_app_target_host }}"
     groups: apache_app_targets
-    ansible_host: "{{ apache_troubleshoot_ansible_host | default(omit) }}"
+    ansible_user: "{{ vm_ssh_username | default('fedora') }}"
+    ansible_host: >-
+      {{
+        apache_app_resolved_ansible_host
+        if apache_app_resolved_ansible_host | length > 0
+        else omit
+      }}

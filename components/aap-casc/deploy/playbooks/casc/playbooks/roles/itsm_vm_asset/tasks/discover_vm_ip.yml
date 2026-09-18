@@ -35,152 +35,7 @@
       | trim
       | length > 0
 
-- name: Wait for fixed IP on secondary VMI interface when annotation is present
-  when: itsm_vm_asset_expected_ip | default('') | string | trim | length > 0
-  block:
-    - name: Wait for fixed IP on secondary VMI interface from guest agent
-      kubernetes.core.k8s_info:
-        host: "{{ openshift_credential_host | default(omit) }}"
-        api_key: "{{ openshift_credential_token | default(omit) }}"
-        validate_certs: false
-        api_version: kubevirt.io/v1
-        kind: VirtualMachineInstance
-        name: "{{ vm_name }}"
-        namespace: "{{ vm_namespace }}"
-      register: itsm_vm_asset_vmi_fixed_ip_wait
-      until: >
-        itsm_vm_asset_vmi_fixed_ip_wait.resources | default([]) | length > 0
-        and (
-          itsm_vm_asset_vmi_fixed_ip_wait.resources[0].status.interfaces | default([])
-          | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
-          | selectattr('ipAddress', 'defined')
-          | rejectattr('ipAddress', 'equalto', '')
-          | map(attribute='ipAddress')
-          | list
-          | first
-          | default('')
-        ) == itsm_vm_asset_expected_ip
-      retries: "{{ itsm_vm_asset_fixed_ip_wait_retries | default(12) }}"
-      delay: "{{ itsm_vm_asset_fixed_ip_wait_delay | default(10) }}"
-      failed_when: false
-
-    - name: Restart VM when secondary fixed IP is not yet reported by guest agent
-      when: >
-        (
-          itsm_vm_asset_vmi_fixed_ip_wait.resources | default([])
-          | length == 0
-        )
-        or (
-          itsm_vm_asset_vmi_fixed_ip_wait.resources[0].status.interfaces | default([])
-          | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
-          | selectattr('ipAddress', 'defined')
-          | rejectattr('ipAddress', 'equalto', '')
-          | map(attribute='ipAddress')
-          | list
-          | first
-          | default('')
-        ) != itsm_vm_asset_expected_ip
-      block:
-        - name: Restart VM so network and cloud-init changes take effect
-          ansible.builtin.include_role:
-            name: common
-            tasks_from: restart_vm.yml
-          vars:
-            vm_restart_name: "{{ vm_name }}"
-            vm_restart_namespace: "{{ vm_namespace }}"
-
-        - name: Wait for fixed IP on secondary VMI interface after VM restart
-          kubernetes.core.k8s_info:
-            host: "{{ openshift_credential_host | default(omit) }}"
-            api_key: "{{ openshift_credential_token | default(omit) }}"
-            validate_certs: false
-            api_version: kubevirt.io/v1
-            kind: VirtualMachineInstance
-            name: "{{ vm_name }}"
-            namespace: "{{ vm_namespace }}"
-          register: itsm_vm_asset_vmi_fixed_ip_post_restart
-          until: >
-            itsm_vm_asset_vmi_fixed_ip_post_restart.resources | default([]) | length > 0
-            and (
-              itsm_vm_asset_vmi_fixed_ip_post_restart.resources[0].status.interfaces | default([])
-              | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
-              | selectattr('ipAddress', 'defined')
-              | rejectattr('ipAddress', 'equalto', '')
-              | map(attribute='ipAddress')
-              | list
-              | first
-              | default('')
-            ) == itsm_vm_asset_expected_ip
-          retries: "{{ itsm_vm_asset_ip_wait_retries }}"
-          delay: "{{ itsm_vm_asset_ip_wait_delay }}"
-
-    - name: Record VMI lookup result for fixed IP extraction
-      ansible.builtin.set_fact:
-        itsm_vm_asset_vmi_for_fixed_ip: >-
-          {{
-            itsm_vm_asset_vmi_fixed_ip_post_restart
-            if (
-              itsm_vm_asset_vmi_fixed_ip_post_restart is defined
-              and (itsm_vm_asset_vmi_fixed_ip_post_restart.resources | default([]) | length > 0)
-            )
-            else itsm_vm_asset_vmi_fixed_ip_wait
-          }}
-
-    - name: Extract fixed IP from secondary VMI interface
-      ansible.builtin.set_fact:
-        itsm_vm_asset_ip: >-
-          {{
-            (
-              itsm_vm_asset_vmi_for_fixed_ip.resources[0].status.interfaces | default([])
-              | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
-              | selectattr('ipAddress', 'defined')
-              | rejectattr('ipAddress', 'equalto', '')
-              | map(attribute='ipAddress')
-              | list
-              | first
-            )
-          }}
-
-- name: Discover VM IP address from KubeVirt VMI when fixed IP annotation is unavailable
-  when: itsm_vm_asset_ip | default('') | string | trim | length == 0
-  block:
-    - name: Wait for VM IP address from KubeVirt VMI
-      kubernetes.core.k8s_info:
-        host: "{{ openshift_credential_host | default(omit) }}"
-        api_key: "{{ openshift_credential_token | default(omit) }}"
-        validate_certs: false
-        api_version: kubevirt.io/v1
-        kind: VirtualMachineInstance
-        name: "{{ vm_name }}"
-        namespace: "{{ vm_namespace }}"
-      register: itsm_vm_asset_vmi_lookup
-      until: >
-        itsm_vm_asset_vmi_lookup.resources | default([]) | length > 0
-        and (
-          itsm_vm_asset_vmi_lookup.resources[0].status.interfaces | default([])
-          | selectattr('ipAddress', 'defined')
-          | rejectattr('ipAddress', 'equalto', '')
-          | list
-          | length
-        ) > 0
-      retries: "{{ itsm_vm_asset_ip_wait_retries }}"
-      delay: "{{ itsm_vm_asset_ip_wait_delay }}"
-
-    - name: Extract VM IP address from VMI interface status
-      ansible.builtin.set_fact:
-        itsm_vm_asset_ip: >-
-          {{
-            (
-              itsm_vm_asset_vmi_lookup.resources[0].status.interfaces | default([])
-              | selectattr('ipAddress', 'defined')
-              | rejectattr('ipAddress', 'equalto', '')
-              | map(attribute='ipAddress')
-              | list
-              | first
-            )
-          }}
-
-- name: Wait for primary VMI interface IP for Ansible automation connectivity
+- name: Wait for VMI interfaces with primary SSH and optional fixed UDN IP
   kubernetes.core.k8s_info:
     host: "{{ openshift_credential_host | default(omit) }}"
     api_key: "{{ openshift_credential_token | default(omit) }}"
@@ -189,37 +44,216 @@
     kind: VirtualMachineInstance
     name: "{{ vm_name }}"
     namespace: "{{ vm_namespace }}"
-  register: itsm_vm_asset_vmi_primary_wait
+  register: _itsm_vm_asset_vmi_poll
   until: >
-    itsm_vm_asset_vmi_primary_wait.resources | default([]) | length > 0
+    _itsm_vm_asset_vmi_poll.resources | default([]) | length > 0
+    and _itsm_vm_asset_vmi_poll.resources[0].status.phase | default('') == 'Running'
     and (
-      itsm_vm_asset_vmi_primary_wait.resources[0].status.interfaces | default([])
+      _itsm_vm_asset_vmi_poll.resources[0].status.interfaces | default([])
       | selectattr('name', 'equalto', 'default')
       | selectattr('ipAddress', 'defined')
       | rejectattr('ipAddress', 'equalto', '')
       | list
       | length
     ) > 0
+    and (
+      itsm_vm_asset_expected_ip | default('') | string | trim | length == 0
+      or (
+        _itsm_vm_asset_vmi_poll.resources[0].status.interfaces | default([])
+        | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
+        | selectattr('ipAddress', 'defined')
+        | rejectattr('ipAddress', 'equalto', '')
+        | map(attribute='ipAddress')
+        | list
+        | first
+        | default('')
+      ) == itsm_vm_asset_expected_ip
+    )
   retries: "{{ itsm_vm_asset_ip_wait_retries }}"
   delay: "{{ itsm_vm_asset_ip_wait_delay }}"
 
-- name: Extract primary pod-network IP for Ansible SSH from AAP execution pods
+- name: Determine whether fixed UDN IP still needs VM restart
   ansible.builtin.set_fact:
-    itsm_vm_asset_ansible_host: >-
+    itsm_vm_asset_fixed_ip_ready: >-
+      {{
+        itsm_vm_asset_expected_ip | default('') | string | trim | length == 0
+        or (
+          _itsm_vm_asset_vmi_poll.resources | default([])
+          | length > 0
+          and (
+            _itsm_vm_asset_vmi_poll.resources[0].status.interfaces | default([])
+            | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
+            | selectattr('ipAddress', 'defined')
+            | rejectattr('ipAddress', 'equalto', '')
+            | map(attribute='ipAddress')
+            | list
+            | first
+            | default('')
+          ) == itsm_vm_asset_expected_ip
+        )
+      }}
+    itsm_vm_asset_vmi_running_with_interfaces: >-
       {{
         (
-          itsm_vm_asset_vmi_primary_wait.resources[0].status.interfaces | default([])
+          _itsm_vm_asset_vmi_poll.resources | default([])
+          | length > 0
+          and _itsm_vm_asset_vmi_poll.resources[0].status.phase | default('') == 'Running'
+          and (
+            _itsm_vm_asset_vmi_poll.resources[0].status.interfaces | default([])
+            | selectattr('ipAddress', 'defined')
+            | rejectattr('ipAddress', 'equalto', '')
+            | list
+            | length
+          ) > 0
+        )
+      }}
+
+- name: Restart VM when fixed UDN IP is missing and VMI is not yet reporting interfaces
+  when:
+    - not itsm_vm_asset_fixed_ip_ready | bool
+    - not itsm_vm_asset_vmi_running_with_interfaces | bool
+  block:
+    - name: Restart VM so network and cloud-init changes take effect
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: restart_vm.yml
+      vars:
+        vm_restart_name: "{{ vm_name }}"
+        vm_restart_namespace: "{{ vm_namespace }}"
+
+    - name: Wait for VMI interfaces after VM restart
+      kubernetes.core.k8s_info:
+        host: "{{ openshift_credential_host | default(omit) }}"
+        api_key: "{{ openshift_credential_token | default(omit) }}"
+        validate_certs: false
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      register: _itsm_vm_asset_vmi_poll
+      until: >
+        _itsm_vm_asset_vmi_poll.resources | default([]) | length > 0
+        and _itsm_vm_asset_vmi_poll.resources[0].status.phase | default('') == 'Running'
+        and (
+          _itsm_vm_asset_vmi_poll.resources[0].status.interfaces | default([])
           | selectattr('name', 'equalto', 'default')
           | selectattr('ipAddress', 'defined')
           | rejectattr('ipAddress', 'equalto', '')
-          | map(attribute='ipAddress')
           | list
-          | first
+          | length
+        ) > 0
+      retries: "{{ itsm_vm_asset_fixed_ip_wait_retries }}"
+      delay: "{{ itsm_vm_asset_fixed_ip_wait_delay }}"
+
+- name: Re-fetch VMI document for IP extraction after wait or restart
+  kubernetes.core.k8s_info:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    api_version: kubevirt.io/v1
+    kind: VirtualMachineInstance
+    name: "{{ vm_name }}"
+    namespace: "{{ vm_namespace }}"
+  register: _itsm_vm_asset_vmi_lookup
+  until: >
+    _itsm_vm_asset_vmi_lookup.resources | default([]) | length > 0
+    and _itsm_vm_asset_vmi_lookup.resources[0].status.phase | default('') == 'Running'
+    and (
+      _itsm_vm_asset_vmi_lookup.resources[0].status.interfaces | default([])
+      | selectattr('name', 'equalto', 'default')
+      | selectattr('ipAddress', 'defined')
+      | rejectattr('ipAddress', 'equalto', '')
+      | list
+      | length
+    ) > 0
+  retries: "{{ itsm_vm_asset_fixed_ip_wait_retries }}"
+  delay: "{{ itsm_vm_asset_fixed_ip_wait_delay }}"
+
+- name: Fail when VMI document is unavailable for IP extraction
+  ansible.builtin.assert:
+    that:
+      - _itsm_vm_asset_vmi_lookup.resources is defined
+      - _itsm_vm_asset_vmi_lookup.resources | default([]) | length > 0
+    fail_msg: >-
+      VMI {{ vm_name }} did not return interface addresses after wait/restart in namespace
+      {{ vm_namespace }}. Ensure Sync Infrastructure VMs completed and guest-agent reported IPs.
+
+- name: Cache VMI resource document for IP extraction
+  ansible.builtin.set_fact:
+    _itsm_vm_asset_vmi_resource: "{{ _itsm_vm_asset_vmi_lookup.resources[0] }}"
+
+- name: Build discovered VM interface IP list from VMI status
+  ansible.builtin.set_fact:
+    _itsm_vm_asset_discovered_interface_ips: >-
+      {{
+        (
+          _itsm_vm_asset_vmi_resource.status.interfaces | default([])
+          | map(attribute='ipAddress', default='')
+          | map('string')
+          | map('trim')
+          | reject('equalto', '')
+          | list
         )
       }}
+
+- name: Extract primary pod-network IP for Ansible SSH from AAP execution pods
+  ansible.builtin.set_fact:
+    _itsm_vm_asset_discovered_ansible_host: >-
+      {{
+        (
+          _itsm_vm_asset_vmi_resource.status.interfaces | default([])
+          | selectattr('name', 'equalto', 'default')
+          | map(attribute='ipAddress', default='')
+          | map('string')
+          | map('trim')
+          | reject('equalto', '')
+          | list
+          | first
+          | default(_itsm_vm_asset_discovered_interface_ips | first | default('', true), true)
+        )
+      }}
+
+- name: Extract fixed UDN IP from secondary VMI interface when annotated
+  ansible.builtin.set_fact:
+    _itsm_vm_asset_discovered_ip: >-
+      {{
+        (
+          _itsm_vm_asset_vmi_resource.status.interfaces | default([])
+          | selectattr('name', 'equalto', vm_udn_pod_interface | default('net1'))
+          | map(attribute='ipAddress', default='')
+          | map('string')
+          | map('trim')
+          | reject('equalto', '')
+          | list
+          | first
+          | default('')
+        )
+      }}
+  when: itsm_vm_asset_expected_ip | default('') | string | trim | length > 0
+
+- name: Extract VM IP from first VMI interface when fixed IP annotation is unavailable
+  ansible.builtin.set_fact:
+    _itsm_vm_asset_discovered_ip: "{{ _itsm_vm_asset_discovered_interface_ips | first | default('', true) }}"
+  when: _itsm_vm_asset_discovered_ip | default('') | string | trim | length == 0
+
+- name: Fail when VM IP addresses could not be discovered
+  ansible.builtin.assert:
+    that:
+      - _itsm_vm_asset_discovered_ansible_host | default('') | string | trim | length > 0
+      - _itsm_vm_asset_discovered_ip | default('') | string | trim | length > 0
+    fail_msg: >-
+      Could not discover IP addresses for VM {{ vm_name }} in namespace {{ vm_namespace }}.
+      Ensure Sync Infrastructure VMs completed and the VMI is Running.
 
 - name: Display discovered VM IP addresses
   ansible.builtin.debug:
     msg:
-      - "VM {{ vm_name }} fixed IP (UDN): {{ itsm_vm_asset_ip }}"
-      - "VM {{ vm_name }} Ansible SSH host (primary pod network): {{ itsm_vm_asset_ansible_host }}"
+      - "VM {{ vm_name }} fixed IP (UDN): {{ _itsm_vm_asset_discovered_ip }}"
+      - "VM {{ vm_name }} Ansible SSH host (primary pod network): {{ _itsm_vm_asset_discovered_ansible_host }}"
+
+- name: Publish VM connectivity facts to workflow artifacts
+  ansible.builtin.set_stats:
+    data:
+      itsm_vm_asset_ip: "{{ _itsm_vm_asset_discovered_ip | string | trim }}"
+      itsm_vm_asset_ansible_host: "{{ _itsm_vm_asset_discovered_ansible_host | string | trim }}"
+  when: itsm_vm_asset_publish_workflow_artifacts | default(true) | bool

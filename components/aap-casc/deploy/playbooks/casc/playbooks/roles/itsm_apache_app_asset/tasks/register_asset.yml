@@ -1,4 +1,9 @@
 ---
+- name: Seed Generic Application asset type id from cache when configured
+  ansible.builtin.set_fact:
+    itsm_apache_app_asset_type_id: "{{ itsm_apache_app_asset_type_id_cache | int }}"
+  when: itsm_apache_app_asset_type_id_cache | default('') | string | trim | length > 0
+
 - name: GET ITSM asset types
   ansible.builtin.uri:
     url: "{{ itsm_api_base_url }}/api/v1/asset-types"
@@ -12,6 +17,7 @@
     headers:
       Accept: application/json
   register: itsm_apache_app_asset_types_list
+  when: itsm_apache_app_asset_type_id is not defined
 
 - name: Resolve Generic Application asset type id
   ansible.builtin.set_fact:
@@ -24,6 +30,7 @@
         | first
         | default(none, true)
       }}
+  when: itsm_apache_app_asset_type_id is not defined
 
 - name: Fail when Generic Application asset type is missing in ITSM
   ansible.builtin.fail:
@@ -34,7 +41,9 @@
 
 - name: GET existing ITSM assets
   ansible.builtin.uri:
-    url: "{{ itsm_api_base_url }}/api/v1/assets"
+    url: >-
+      {{ itsm_api_base_url }}/api/v1/assets?name={{
+      itsm_apache_app_asset_name | urlencode }}
     method: GET
     force_basic_auth: true
     url_username: "{{ itsm_api_user }}"

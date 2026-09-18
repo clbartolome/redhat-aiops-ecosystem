@@ -14,18 +14,11 @@ ansible-navigator:
     pull:
       policy: missing
     environment-variables:
-      pass:
-        - KUBECONFIG
       set:
         KUBECONFIG: /root/.kube/config
     volume-mounts:
       - src: "~/.kube"
         dest: "/root/.kube"
-        options: Z
-      # Mount repo root at the same absolute path inside the EE (update dest if your checkout path differs).
-      # Required for playbooks under deploy/playbooks/casc/ to find deploy/roles and deploy/group_vars.
-      - src: ".."
-        dest: "/home/rafsanch/Documents/Projects/redhat-aiops-ecosystem"
         options: Z
   logging:
     append: true

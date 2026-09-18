@@ -16,13 +16,16 @@
       vars:
         eda_uninstall_activation_name: "{{ aap_eda_pipeline_activation_name }}"
 
-    - name: Remove test Apache alert rulebook activation from EDA if present
+    - name: Remove legacy EDA rulebook activations by name
       ansible.builtin.include_tasks: eda_remove_activation.yml
       vars:
-        eda_uninstall_activation_name: Apache Alert Incident Activation Test
+        eda_uninstall_activation_name: "{{ item }}"
+      loop: "{{ aap_uninstall_eda_legacy_activation_names | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
 
-    - name: Remove legacy EDA event streams when present
-      ansible.builtin.include_tasks: remove_legacy_event_streams.yml
+    - name: Remove any remaining activations bound to AIOps decision environment
+      ansible.builtin.include_tasks: eda_remove_activations_for_decision_environment.yml
 
     - name: Remove AIOps Rulebooks EDA project
       ansible.eda.project:
@@ -33,12 +36,7 @@
         validate_certs: "{{ aap_uninstall_validate_certs }}"
 
     - name: Remove AIOps decision environment from EDA
-      ansible.eda.decision_environment:
-        name: "{{ aap_eda_pipeline_decision_environment }}"
-        state: absent
-        controller_host: "{{ aap_uninstall_controller_host }}"
-        controller_token: "{{ aap_uninstall_controller_oauthtoken }}"
-        validate_certs: "{{ aap_uninstall_validate_certs }}"
+      ansible.builtin.include_tasks: eda_remove_decision_environment.yml
 
     - name: Remove EDA credentials for Apache alert pipeline
       ansible.eda.credential:

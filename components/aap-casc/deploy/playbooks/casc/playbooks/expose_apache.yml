@@ -9,6 +9,8 @@
       ansible.builtin.import_role:
         name: itsm_change_task
         tasks_from: start.yml
+      vars:
+        itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_expose_apache }}"
 
     - name: Inject Apache Service and Route into VM manifest and sync GitOps
       ansible.builtin.import_role:
@@ -18,3 +20,5 @@
       ansible.builtin.import_role:
         name: itsm_change_task
         tasks_from: complete.yml
+      vars:
+        itsm_ctask_template_name: "{{ itsm_apache_stack_task_template_expose_apache }}"

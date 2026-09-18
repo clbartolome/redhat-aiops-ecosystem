@@ -1,31 +1,11 @@
 ---
-- name: Ensure Install httpd job template exists in AAP
+- name: Ensure Configure Generic App job template exists in AAP
   awx.awx.job_template:
-    name: "{{ aap_httpd_pipeline_jt_install }}"
+    name: "{{ aap_httpd_pipeline_jt_configure }}"
     organization: "{{ aap_httpd_pipeline_organization }}"
     project: "{{ aap_httpd_pipeline_project }}"
     inventory: "{{ aap_httpd_pipeline_inventory }}"
-    playbook: "{{ aap_httpd_pipeline_playbook_install }}"
-    job_type: run
-    state: present
-    survey_enabled: false
-    extra_vars: "{{ aap_httpd_pipeline_job_extra_vars }}"
-    ask_variables_on_launch: true
-    credentials:
-      - "{{ aap_httpd_pipeline_credential_vms }}"
-      - "{{ aap_httpd_pipeline_credential_itsm }}"
-      - "{{ aap_httpd_pipeline_credential_aap }}"
-    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
-    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
-    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
-
-- name: Ensure Deploy Apache App job template exists in AAP
-  awx.awx.job_template:
-    name: "{{ aap_httpd_pipeline_jt_deploy }}"
-    organization: "{{ aap_httpd_pipeline_organization }}"
-    project: "{{ aap_httpd_pipeline_project }}"
-    inventory: "{{ aap_httpd_pipeline_inventory }}"
-    playbook: "{{ aap_httpd_pipeline_playbook_deploy }}"
+    playbook: "{{ aap_httpd_pipeline_playbook_configure }}"
     job_type: run
     state: present
     survey_enabled: false
@@ -40,7 +20,27 @@
     controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
 
-- name: Ensure Expose Apache job template exists in AAP
+- name: Ensure Complete Generic App Stack job template exists in AAP
+  awx.awx.job_template:
+    name: "{{ aap_httpd_pipeline_jt_complete_stack }}"
+    organization: "{{ aap_httpd_pipeline_organization }}"
+    project: "{{ aap_httpd_pipeline_project }}"
+    inventory: "{{ aap_httpd_pipeline_inventory }}"
+    playbook: "{{ aap_httpd_pipeline_playbook_complete_stack }}"
+    job_type: run
+    state: present
+    survey_enabled: false
+    extra_vars: "{{ aap_httpd_pipeline_job_extra_vars }}"
+    ask_variables_on_launch: true
+    credentials:
+      - "{{ aap_httpd_pipeline_credential_itsm }}"
+      - "{{ aap_httpd_pipeline_credential_aap }}"
+      - "{{ aap_httpd_pipeline_credential_chat }}"
+    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
+
+- name: Ensure Expose application job template exists in AAP
   awx.awx.job_template:
     name: "{{ aap_httpd_pipeline_jt_expose }}"
     organization: "{{ aap_httpd_pipeline_organization }}"
@@ -61,7 +61,7 @@
     controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
 
-- name: Ensure Register ITSM Apache Application Asset job template exists in AAP
+- name: Ensure Register ITSM Generic Application Asset job template exists in AAP
   awx.awx.job_template:
     name: "{{ aap_httpd_pipeline_jt_register_itsm }}"
     organization: "{{ aap_httpd_pipeline_organization }}"
@@ -78,27 +78,6 @@
       - "{{ aap_httpd_pipeline_credential_openshift }}"
       - "{{ aap_httpd_pipeline_credential_itsm }}"
       - "{{ aap_httpd_pipeline_credential_aap }}"
-    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
-    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
-    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
-
-- name: Ensure Start httpd job template exists in AAP
-  awx.awx.job_template:
-    name: "{{ aap_httpd_pipeline_jt_start }}"
-    organization: "{{ aap_httpd_pipeline_organization }}"
-    project: "{{ aap_httpd_pipeline_project }}"
-    inventory: "{{ aap_httpd_pipeline_inventory }}"
-    playbook: "{{ aap_httpd_pipeline_playbook_start }}"
-    job_type: run
-    state: present
-    survey_enabled: false
-    extra_vars: "{{ aap_httpd_pipeline_job_extra_vars }}"
-    ask_variables_on_launch: true
-    credentials:
-      - "{{ aap_httpd_pipeline_credential_vms }}"
-      - "{{ aap_httpd_pipeline_credential_itsm }}"
-      - "{{ aap_httpd_pipeline_credential_aap }}"
-      - "{{ aap_httpd_pipeline_credential_chat }}"
     controller_host: "{{ aap_httpd_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"

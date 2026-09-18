@@ -8,11 +8,9 @@ ROLES_DIR = Path("/home/rafsanch/Projects/redhat-aiops-ecosystem/components/aap-
 ROLE_PREFIX = {
     "aap-casc": "aap_casc",
     "aap-vm-pipeline": "aap_vm_pipeline",
-    "aap-vm-modification-pipeline": "aap_vm_modification_pipeline",
     "aap-httpd-pipeline": "aap_httpd_pipeline",
     "aap-apache-stack-pipeline": "aap_apache_stack_pipeline",
     "aap-apache-troubleshoot-pipeline": "aap_apache_troubleshoot_pipeline",
-    "aap-lightspeed-remediation-pipeline": "aap_lightspeed_remediation_pipeline",
     "aap-reset-pipeline": "aap_reset_pipeline",
     "aap-itsm-chat-pipeline": "aap_itsm_chat_pipeline",
     "aap-uninstall": "aap_uninstall",

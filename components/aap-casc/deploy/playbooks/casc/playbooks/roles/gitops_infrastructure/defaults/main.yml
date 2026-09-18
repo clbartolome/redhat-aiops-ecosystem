@@ -12,5 +12,6 @@ gitops_infrastructure_validate_certs: false
 gitops_infrastructure_gitea_insecure: true
 gitops_infrastructure_sync_wait: true
 gitops_infrastructure_sync_wait_retries: 30
-gitops_infrastructure_sync_wait_delay: 10
+gitops_infrastructure_sync_wait_delay: 5
+gitops_infrastructure_refresh_mode: hard
 gitops_infrastructure_accept_unhealthy: false

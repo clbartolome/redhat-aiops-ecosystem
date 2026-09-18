@@ -1,7 +1,9 @@
 ---
 - name: GET ITSM assets to resolve parent Virtual Machine asset
   ansible.builtin.uri:
-    url: "{{ itsm_api_base_url }}/api/v1/assets"
+    url: >-
+      {{ itsm_api_base_url }}/api/v1/assets?name={{
+      itsm_apache_app_target_host | urlencode }}
     method: GET
     force_basic_auth: true
     url_username: "{{ itsm_api_user }}"
@@ -35,7 +37,7 @@
 - name: Fail when parent Virtual Machine asset is missing in ITSM
   ansible.builtin.fail:
     msg: >-
-      Virtual Machine ITSM asset '{{ itsm_apache_app_target_host }}' was not found. The Deploy Apache App workflow
+      Virtual Machine ITSM asset '{{ itsm_apache_app_target_host }}' was not found. The Deploy Generic App workflow
       requires Register ITSM VM Asset to run first in the Provision VM sub-workflow.
   when: itsm_apache_app_vm_asset_id | default('') | string | trim | length == 0
 

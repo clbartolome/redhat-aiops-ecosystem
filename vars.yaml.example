@@ -27,6 +27,18 @@ aap_mcp:
   token_scope: write
   token_secret_name: aap-mcp-agent-token
   validate_certs: false
+  # Set true after AAP reset to force a fresh gateway OAuth token.
+  recreate_token_on_install: false
+  # Refresh agent-config and restart the agent after MCP token changes.
+  sync_agent_token: true
+  # Validate gateway auth and MCP initialize handshake during install.
+  test_connectivity: true
+  token_probe_retries: 12
+  token_probe_delay: 10
+  mcp_probe_retries: 12
+  mcp_probe_delay: 10
+  agent_rollout_wait_retries: 30
+  agent_rollout_wait_delay: 10
 
 aap_eda:
   namespace: aap
@@ -37,6 +49,8 @@ aap_eda:
   postgres_admin_password_key: postgres_admin_password
   database_name: eda
   database_owner: eda
+  # Leave false for re-runs; set true only for a deliberate EDA database reset.
+  reset_database_on_install: false
 
 gitops:
   namespace: openshift-gitops
@@ -47,7 +61,7 @@ gitops:
 
 itsm:
   namespace: itsm-app
-  image: quay.io/rhn_support_rafsanch/itsm-app:v2.1
+  image: quay.io/rhn_support_rafsanch/itsm-app:v2.2
   session_secret: <replace-with-long-random-string>
   mcp_token: <your-itsm-mcp-token>
   bootstrap_admin_user: admin

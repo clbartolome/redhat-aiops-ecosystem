@@ -40,6 +40,16 @@
       ansible.builtin.include_tasks:
         file: components/agent/install.yaml
 
+    - name: Synchronize AAP MCP token with agent
+      ansible.builtin.include_tasks:
+        file: components/agent/sync_aap_mcp_token.yml
+      when: aap_mcp.sync_agent_token | default(true) | bool
+
+    - name: Test AAP MCP token and connectivity
+      ansible.builtin.include_tasks:
+        file: components/aap-mcp/test_connectivity.yml
+      when: aap_mcp.test_connectivity | default(true) | bool
+
     - name: Install chat
       ansible.builtin.include_tasks:
         file: components/chat/install.yaml

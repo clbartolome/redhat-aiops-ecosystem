@@ -4,7 +4,7 @@
     name: common
     tasks_from: load_openshift_credential.yml
 
-- name: List Apache HTTP Probe resources in monitoring namespace
+- name: List Apache HTTP Probe resources in observability namespace
   kubernetes.core.k8s_info:
     host: "{{ openshift_credential_host | default(omit) }}"
     api_key: "{{ openshift_credential_token | default(omit) }}"
@@ -12,14 +12,26 @@
     api_version: monitoring.coreos.com/v1
     kind: Probe
     namespace: "{{ openshift_apache_monitoring_namespace | default(observability.namespace | default('observability')) }}"
-  register: reset_apache_http_probes
+  register: reset_apache_http_probes_observability
+
+- name: List legacy Apache HTTP Probe resources in VM namespace
+  kubernetes.core.k8s_info:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    api_version: monitoring.coreos.com/v1
+    kind: Probe
+    namespace: "{{ reset_gitops_dest_namespace }}"
+  register: reset_apache_http_probes_vm_namespace
 
 - name: Build Apache HTTP probes to remove
   ansible.builtin.set_fact:
     reset_apache_http_probes_to_remove: >-
       {{
-        reset_apache_http_probes.resources
-        | default([])
+        (
+          reset_apache_http_probes_observability.resources | default([])
+          + reset_apache_http_probes_vm_namespace.resources | default([])
+        )
         | selectattr('spec.jobName', 'defined')
         | selectattr('spec.jobName', 'equalto', openshift_apache_monitoring_probe_job | default('apache-http'))
         | list
@@ -47,6 +59,10 @@
     validate_certs: false
     state: present
     definition: "{{ lookup('template', playbook_dir ~ '/templates/openshift_apache_prometheus_rule.yaml.j2') | from_yaml }}"
+
+- name: Purge stale VM fleet metrics from observability Prometheus
+  ansible.builtin.include_tasks: observability_purge_vm_fleet_metrics.yml
+  when: reset_prometheus_purge_vm_fleet_metrics | default(true) | bool
 
 - name: Resolve OpenShift cluster domain for external Thanos querier URL
   when: lookup('ansible.builtin.env', 'KUBERNETES_SERVICE_HOST', default='') | trim | length == 0

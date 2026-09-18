@@ -11,7 +11,6 @@ reset_chat_channel: operations
 reset_gitea_infrastructure_repo: Infrastructure
 reset_gitea_infrastructure_path: vms
 reset_gitea_playbooks_repo: Playbooks
-reset_gitea_remediations_path: remediations
 reset_gitea_branch: main
 reset_gitea_git_user_name: aiops-automation
 reset_gitea_git_user_email: aiops@example.com
@@ -20,7 +19,6 @@ reset_gitea_internal_host: gitea-http.gitea.svc.cluster.local:3000
 reset_gitea_use_internal: >-
   {{ lookup('ansible.builtin.env', 'KUBERNETES_SERVICE_HOST', default='') | trim | length > 0 }}
 
-reset_lightspeed_jt_name_prefix: "Lightspeed Remediation - "
 reset_aap_cleanup_job_name: Cleanup Job Details
 reset_aap_cleanup_days: 0
 
@@ -36,6 +34,10 @@ openshift_apache_monitoring_probe_scrape_timeout: 5s
 openshift_apache_monitoring_prometheus_rule_name: apache-http-probes
 reset_apache_alert_clear_retries: 20
 reset_apache_alert_clear_delay: 15
+reset_observability_namespace: "{{ observability.namespace | default('observability') }}"
+reset_prometheus_purge_vm_fleet_metrics: true
+reset_prometheus_purge_wait_retries: 12
+reset_prometheus_purge_wait_delay: 5
 
 reset_gitops_dest_namespace: "{{ gitops_infrastructure_dest_namespace | default('aiops-demo') }}"
 reset_gitops_app_name: "{{ gitops_infrastructure_app_name | default('infrastructure-vms') }}"

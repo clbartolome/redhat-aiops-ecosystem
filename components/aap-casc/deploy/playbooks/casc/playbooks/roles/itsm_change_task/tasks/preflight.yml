@@ -24,3 +24,4 @@
   ansible.builtin.include_role:
     name: common
     tasks_from: load_aap_controller_credential.yml
+  when: itsm_change_task_ctask_title == itsm_change_task_final_ctask_title
