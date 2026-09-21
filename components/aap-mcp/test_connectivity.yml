@@ -1,0 +1,85 @@
+---
+- name: Validate AAP MCP OAuth token against gateway API
+  ansible.builtin.uri:
+    url: "{{ aap_gateway_url }}/api/gateway/v1/me/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_mcp_token_value | default(aap_mcp.token) }}"
+    validate_certs: "{{ aap_mcp.validate_certs | default(false) | bool }}"
+    status_code: [200]
+  register: aap_mcp_gateway_token_probe
+  until: aap_mcp_gateway_token_probe.status == 200
+  retries: "{{ aap_mcp.token_probe_retries | default(12) }}"
+  delay: "{{ aap_mcp.token_probe_delay | default(10) }}"
+  no_log: true
+
+- name: Look up agent Deployment for MCP probe
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: agent
+    namespace: "{{ agent.namespace }}"
+  register: aap_mcp_test_agent_deployment
+
+- name: Wait for running agent pod before MCP probe
+  when: aap_mcp_test_agent_deployment.resources | default([]) | length > 0
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ agent.namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=agent
+  register: aap_mcp_test_agent_pods
+  until: >-
+    (
+      aap_mcp_test_agent_pods.resources | default([])
+      | selectattr('status.phase', 'equalto', 'Running')
+      | list
+      | length
+    ) > 0
+  retries: "{{ aap_mcp.mcp_probe_retries | default(12) }}"
+  delay: "{{ aap_mcp.mcp_probe_delay | default(10) }}"
+
+- name: Select newest running agent pod for MCP probe
+  ansible.builtin.set_fact:
+    aap_mcp_test_agent_pod_name: >-
+      {{
+        (
+          aap_mcp_test_agent_pods.resources
+          | selectattr('status.phase', 'equalto', 'Running')
+          | sort(attribute='metadata.creationTimestamp')
+          | last
+        ).metadata.name
+      }}
+  when: aap_mcp_test_agent_deployment.resources | default([]) | length > 0
+
+- name: Probe AAP MCP initialize handshake from agent pod
+  when:
+    - aap_mcp_test_agent_deployment.resources | default([]) | length > 0
+    - aap_mcp_test_agent_pod_name is defined
+  block:
+    - name: Run MCP initialize probe via agent pod
+      kubernetes.core.k8s_exec:
+        namespace: "{{ agent.namespace }}"
+        pod: "{{ aap_mcp_test_agent_pod_name }}"
+        command: >-
+          python3 -c "import json, os, sys, urllib.request; url=os.environ.get('AAP_MCP_URL','').strip(); token=os.environ.get('AAP_MCP_TOKEN','').strip(); sys.exit(1) if not url or not token else None; req=urllib.request.Request(url, data=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-03-26','capabilities':{},'clientInfo':{'name':'aiops-install-probe','version':'1.0'}}}).encode(), headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json, text/event-stream'}, method='POST'); resp=urllib.request.urlopen(req, timeout=30); body=resp.read().decode('utf-8', errors='replace'); print(body[:500]); sys.exit(0 if resp.status==200 else 1)"
+      register: aap_mcp_initialize_probe
+      until: aap_mcp_initialize_probe.rc | default(1) == 0
+      retries: "{{ aap_mcp.mcp_probe_retries | default(12) }}"
+      delay: "{{ aap_mcp.mcp_probe_delay | default(10) }}"
+
+    - name: Show AAP MCP initialize probe result
+      ansible.builtin.debug:
+        msg: >-
+          AAP MCP initialize probe succeeded from agent pod
+          {{ aap_mcp_test_agent_pod_name }} using agent AAP_MCP_URL.
+
+- name: Skip in-cluster MCP probe when agent pod is not deployed yet
+  ansible.builtin.debug:
+    msg: >-
+      Agent pod not found in namespace {{ agent.namespace }}.
+      Gateway token probe succeeded; in-cluster MCP probe skipped.
+  when:
+    - aap_mcp_test_agent_deployment.resources | default([]) | length == 0
+    - aap_mcp_test_agent_pod_name is not defined

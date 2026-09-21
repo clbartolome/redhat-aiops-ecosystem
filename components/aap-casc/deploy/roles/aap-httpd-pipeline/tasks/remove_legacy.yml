@@ -1,0 +1,36 @@
+---
+- name: Remove legacy Install application packages job template from AAP
+  awx.awx.job_template:
+    name: "{{ aap_httpd_pipeline_legacy_jt_install }}"
+    organization: "{{ aap_httpd_pipeline_organization }}"
+    state: absent
+    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
+
+- name: Remove legacy Deploy application repository job template from AAP
+  awx.awx.job_template:
+    name: "{{ aap_httpd_pipeline_legacy_jt_deploy }}"
+    organization: "{{ aap_httpd_pipeline_organization }}"
+    state: absent
+    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
+
+- name: Remove legacy Start application services job template from AAP
+  awx.awx.job_template:
+    name: "{{ aap_httpd_pipeline_legacy_jt_start }}"
+    organization: "{{ aap_httpd_pipeline_organization }}"
+    state: absent
+    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"
+
+- name: Remove standalone Deploy Generic App workflow from AAP
+  awx.awx.workflow_job_template:
+    name: "{{ aap_httpd_pipeline_legacy_workflow }}"
+    organization: "{{ aap_httpd_pipeline_organization }}"
+    state: absent
+    controller_host: "{{ aap_httpd_pipeline_controller_host }}"
+    controller_oauthtoken: "{{ aap_httpd_pipeline_controller_oauthtoken }}"
+    validate_certs: "{{ aap_httpd_pipeline_validate_certs }}"

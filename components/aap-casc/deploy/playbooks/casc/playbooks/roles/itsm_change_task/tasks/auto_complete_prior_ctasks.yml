@@ -1,0 +1,65 @@
+---
+- name: Set CTASK title for prior-task auto-completion lookup
+  ansible.builtin.set_fact:
+    itsm_change_task_ctask_title: "{{ itsm_ctask_template_name }}"
+
+- name: Load ITSM API credentials for prior CTASK auto-completion
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: load_itsm_credential.yml
+
+- name: GET ITSM change detail for prior CTASK auto-completion
+  ansible.builtin.uri:
+    url: "{{ itsm_api_base_url | regex_replace('/$', '') }}/api/v1/changes/{{ itsm_change_ref | urlencode }}"
+    method: GET
+    force_basic_auth: true
+    url_username: "{{ itsm_api_user }}"
+    url_password: "{{ itsm_api_password }}"
+    validate_certs: "{{ itsm_change_task_validate_certs }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Accept: application/json
+  register: itsm_prior_ctask_change_detail
+  when: itsm_change_task_change_detail is not defined
+
+- name: Reuse cached ITSM change detail for prior CTASK auto-completion
+  ansible.builtin.set_fact:
+    itsm_prior_ctask_change_detail: "{{ itsm_change_task_change_detail }}"
+  when:
+    - itsm_change_task_change_detail is defined
+    - itsm_prior_ctask_change_detail is not defined
+
+- name: Determine index of current milestone CTASK on the change
+  ansible.builtin.set_fact:
+    itsm_prior_ctask_current_index: >-
+      {{
+        (
+          itsm_prior_ctask_change_detail.json.tasks | default([])
+          | map(attribute='title')
+          | list
+        ).index(itsm_change_task_ctask_title)
+      }}
+
+- name: Determine pending CTASKs that precede the current milestone
+  ansible.builtin.set_fact:
+    itsm_prior_pending_ctasks: >-
+      {{
+        (itsm_prior_ctask_change_detail.json.tasks | default([]))[:itsm_prior_ctask_current_index | int]
+        | selectattr('status', 'equalto', 'pending')
+        | list
+      }}
+
+- name: Auto-complete prior pending CTASKs before current milestone
+  ansible.builtin.include_tasks: auto_complete_one_prior_ctask.yml
+  loop: "{{ itsm_prior_pending_ctasks }}"
+  loop_control:
+    loop_var: itsm_prior_ctask_item
+    label: "{{ itsm_prior_ctask_item.title }}"
+
+- name: Summarize prior CTASK auto-completion
+  ansible.builtin.debug:
+    msg: >-
+      Auto-completed {{ itsm_prior_pending_ctasks | length }} prior pending CTASK(s)
+      before milestone '{{ itsm_change_task_ctask_title }}' on {{ itsm_change_ref }}.
+  when: itsm_prior_pending_ctasks | length > 0

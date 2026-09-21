@@ -1,0 +1,40 @@
+---
+- name: Resolve AAP CASC deploy directory
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/components/aap-casc/deploy/group_vars/all"
+  register: aap_casc_deploy_group_vars_from_root
+
+- name: Set AAP CASC deploy directory from repository root
+  ansible.builtin.set_fact:
+    aap_casc_deploy_dir: "{{ playbook_dir }}/components/aap-casc/deploy"
+  when: aap_casc_deploy_group_vars_from_root.stat.exists
+
+- name: Set AAP CASC deploy directory from casc playbooks path
+  ansible.builtin.set_fact:
+    aap_casc_deploy_dir: "{{ playbook_dir }}/../.."
+  when: not aap_casc_deploy_group_vars_from_root.stat.exists
+
+- name: Load AAP CASC group variables
+  ansible.builtin.include_vars:
+    dir: "{{ aap_casc_deploy_dir }}/group_vars/all"
+    extensions:
+      - yml
+
+- name: Load AAP CASC observability mapping
+  ansible.builtin.include_vars:
+    file: "{{ aap_casc_deploy_dir }}/group_vars/all/observability-mapping.yml"
+
+- name: Discover platform connection facts
+  ansible.builtin.include_role:
+    name: aap-platform-facts
+
+- name: Remove AAP CASC objects from Ansible Automation Platform
+  ansible.builtin.include_role:
+    name: aap-uninstall
+  when: uninstall_remove_aap | default(true) | bool
+
+- name: Remove aiops-demo namespace and related OpenShift resources
+  ansible.builtin.include_role:
+    name: aiops-demo-prep
+    tasks_from: uninstall
+  when: uninstall_remove_aiops_demo_namespace | default(true) | bool

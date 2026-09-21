@@ -1,0 +1,134 @@
+---
+- name: Resolve repository root for agent env template
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/components/agent/.env"
+  register: aap_mcp_agent_env_from_repo_root
+
+- name: Set agent env template path
+  ansible.builtin.set_fact:
+    aap_mcp_agent_env_template_path: >-
+      {{
+        playbook_dir ~ '/components/agent/.env'
+        if aap_mcp_agent_env_from_repo_root.stat.exists | default(false)
+        else playbook_dir ~ '/../agent/.env'
+      }}
+
+- name: Look up agent Deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: agent
+    namespace: "{{ agent.namespace }}"
+  register: aap_mcp_agent_deployment
+
+- name: Skip agent token sync when agent is not deployed
+  ansible.builtin.debug:
+    msg: >-
+      Agent Deployment not found in namespace {{ agent.namespace }}.
+      Skipping AAP MCP token synchronization.
+  when: aap_mcp_agent_deployment.resources | default([]) | length == 0
+
+- name: Synchronize AAP MCP token with agent
+  when: aap_mcp_agent_deployment.resources | default([]) | length > 0
+  block:
+    - name: Merge current AAP MCP token into agent configuration
+      ansible.builtin.set_fact:
+        agent_effective_config: >-
+          {{
+            agent | combine({
+              'aap_mcp_token': aap_mcp_token_value | default(aap_mcp.token)
+            }, recursive=True)
+          }}
+
+    - name: Build agent-config from templated env with current AAP MCP token
+      ansible.builtin.set_fact:
+        agent_config: "{{ agent_config | default({}) | combine({ (item.split('=', 1)[0]): (item.split('=', 1)[1] | string) }) }}"
+      loop: >-
+        {{
+          lookup(
+            'template',
+            aap_mcp_agent_env_template_path,
+            template_vars={'agent': agent_effective_config}
+          ).splitlines()
+          | select('match', '^[A-Za-z_][A-Za-z0-9_]*=')
+          | list
+        }}
+      no_log: true
+
+    - name: Update agent-config secret with current AAP MCP token
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: agent-config
+            namespace: "{{ agent.namespace }}"
+          type: Opaque
+          stringData: "{{ agent_config }}"
+      no_log: true
+
+    - name: Capture rollout restart timestamp for agent
+      ansible.builtin.set_fact:
+        aap_mcp_agent_restart_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+    - name: Rollout restart agent Deployment to load refreshed MCP token
+      kubernetes.core.k8s:
+        state: patched
+        merge_type: strategic-merge
+        api_version: apps/v1
+        kind: Deployment
+        name: agent
+        namespace: "{{ agent.namespace }}"
+        definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/restartedAt: "{{ aap_mcp_agent_restart_at }}"
+
+    - name: Wait for agent Deployment to finish rollout restart
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: agent
+        namespace: "{{ agent.namespace }}"
+      register: aap_mcp_agent_rollout_status
+      until: >-
+        aap_mcp_agent_rollout_status.resources | default([]) | length > 0
+        and (
+          aap_mcp_agent_rollout_status.resources[0].status.updatedReplicas | default(0) | int
+          >= aap_mcp_agent_rollout_status.resources[0].status.replicas | default(0) | int
+        )
+        and (
+          aap_mcp_agent_rollout_status.resources[0].status.availableReplicas | default(0) | int
+          >= aap_mcp_agent_rollout_status.resources[0].status.replicas | default(0) | int
+        )
+      retries: "{{ aap_mcp.agent_rollout_wait_retries | default(30) }}"
+      delay: "{{ aap_mcp.agent_rollout_wait_delay | default(10) }}"
+
+    - name: Wait for agent pod readiness after MCP token sync
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ agent.namespace }}"
+        label_selectors:
+          - app.kubernetes.io/name=agent
+      register: aap_mcp_agent_pod_status
+      until: >-
+        aap_mcp_agent_pod_status.resources | default([]) | length > 0
+        and (
+          aap_mcp_agent_pod_status.resources
+          | selectattr('status.phase', 'equalto', 'Running')
+          | list
+          | length
+          > 0
+        )
+      retries: "{{ aap_mcp.agent_rollout_wait_retries | default(30) }}"
+      delay: "{{ aap_mcp.agent_rollout_wait_delay | default(10) }}"
+
+    - name: Show agent MCP token sync result
+      ansible.builtin.debug:
+        msg:
+          - "Updated secret agent-config in namespace {{ agent.namespace }}"
+          - "Restarted agent Deployment at {{ aap_mcp_agent_restart_at }}"

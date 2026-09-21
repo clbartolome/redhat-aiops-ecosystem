@@ -8,6 +8,13 @@
   vars:
     aap_controller_token_fact_name: aap_vm_pipeline_controller_oauthtoken
 
+- name: Ensure platform admin can manage AIOps organization in controller
+  ansible.builtin.include_role:
+    name: aap-controller
+    tasks_from: ensure_organization_admin.yml
+  vars:
+    aap_controller_organization: "{{ aap_vm_pipeline_organization }}"
+
 - name: Configure AAP inventory, project, and VM stack job templates
   block:
     - name: Ensure AIOps localhost inventory exists

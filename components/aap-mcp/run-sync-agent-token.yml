@@ -1,0 +1,5 @@
+---
+# Wrapper for ansible-navigator. Run from ansible-navigator/:
+#   ansible-navigator run ../run-sync-aap-mcp-token.yaml -m stdout \
+#     -e "ocp_host=$CLUSTER_DOMAIN" -e "api_token=$OPENSHIFT_TOKEN"
+- import_playbook: ../run-sync-aap-mcp-token.yaml

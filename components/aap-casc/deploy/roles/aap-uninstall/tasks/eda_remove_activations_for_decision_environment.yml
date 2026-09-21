@@ -1,0 +1,31 @@
+---
+- name: List EDA rulebook activations still using {{ aap_eda_pipeline_decision_environment }}
+  ansible.builtin.uri:
+    url: "{{ aap_uninstall_controller_host }}/api/eda/v1/activations/?page_size=200"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+    return_content: true
+  register: eda_uninstall_all_activations
+
+- name: Build list of activations bound to {{ aap_eda_pipeline_decision_environment }}
+  ansible.builtin.set_fact:
+    eda_uninstall_de_activations: >-
+      {{
+        eda_uninstall_all_activations.json.results | default([])
+        | selectattr('decision_environment', 'defined')
+        | selectattr('decision_environment.name', 'equalto', aap_eda_pipeline_decision_environment)
+        | list
+      }}
+
+- name: Remove activations still bound to {{ aap_eda_pipeline_decision_environment }}
+  ansible.builtin.include_tasks: eda_remove_activation.yml
+  vars:
+    eda_uninstall_activation_name: "{{ item.name }}"
+    eda_uninstall_activation_organization: "{{ item.organization.name }}"
+  loop: "{{ eda_uninstall_de_activations }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: eda_uninstall_de_activations | length > 0

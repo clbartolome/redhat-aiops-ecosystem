@@ -14,11 +14,8 @@
       namespace {{ aap_mcp.namespace }}. Deploy AAP before installing aap-mcp.
   when: aap_instance.resources | length == 0
 
-- name: Set AAP gateway connection facts
-  ansible.builtin.set_fact:
-    aap_gateway_url: "{{ aap_instance.resources[0].status.URL }}"
-    aap_admin_user: "{{ aap_instance.resources[0].status.adminUser }}"
-    aap_admin_password_secret: "{{ aap_instance.resources[0].status.adminPasswordSecret }}"
+- name: Wait for AAP gateway status and set connection facts
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/components/aap-mcp/wait_gateway_status.yml"
 
 - name: Check for existing AnsibleMCPServer custom resources
   kubernetes.core.k8s_info:

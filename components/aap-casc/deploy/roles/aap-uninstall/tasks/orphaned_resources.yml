@@ -1,0 +1,52 @@
+---
+- name: List controller job templates without organization
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/controller/v2/job_templates/?organization__isnull=true&page_size=200
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+  register: aap_uninstall_orphan_job_templates
+
+- name: Remove controller job templates without organization
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/controller/v2/job_templates/{{
+      item.id }}/
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: [202, 204]
+  loop: "{{ aap_uninstall_orphan_job_templates.json.results | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: aap_uninstall_orphan_job_templates.json.count | default(0) > 0
+
+- name: List controller workflow job templates without organization
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/controller/v2/workflow_job_templates/?organization__isnull=true&page_size=200
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+  register: aap_uninstall_orphan_workflow_job_templates
+
+- name: Remove controller workflow job templates without organization
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/controller/v2/workflow_job_templates/{{
+      item.id }}/
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: [202, 204]
+  loop: "{{ aap_uninstall_orphan_workflow_job_templates.json.results | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: aap_uninstall_orphan_workflow_job_templates.json.count | default(0) > 0

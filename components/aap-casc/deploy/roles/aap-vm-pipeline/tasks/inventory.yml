@@ -8,13 +8,94 @@
     controller_oauthtoken: "{{ aap_vm_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_vm_pipeline_validate_certs }}"
 
-- name: Ensure localhost host exists in AIOps Localhost inventory
-  awx.awx.host:
-    name: localhost
-    inventory: "{{ aap_vm_pipeline_inventory }}"
-    state: present
-    variables:
-      ansible_connection: local
-    controller_host: "{{ aap_vm_pipeline_controller_host }}"
-    controller_oauthtoken: "{{ aap_vm_pipeline_controller_oauthtoken }}"
+- name: Look up AIOps Localhost inventory id in organization
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_vm_pipeline_controller_host }}/api/controller/v2/inventories/?name={{
+      aap_vm_pipeline_inventory | urlencode }}&organization__name={{
+      aap_vm_pipeline_organization | urlencode }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_vm_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_vm_pipeline_validate_certs }}"
+    status_code: 200
+  register: aap_vm_pipeline_localhost_inventory_lookup
+
+- name: Fail when AIOps Localhost inventory was not found in organization
+  ansible.builtin.fail:
+    msg: >-
+      Inventory {{ aap_vm_pipeline_inventory }} was not found in organization
+      {{ aap_vm_pipeline_organization }} after create.
+  when: aap_vm_pipeline_localhost_inventory_lookup.json.count | default(0) == 0
+
+- name: Set AIOps Localhost inventory id fact
+  ansible.builtin.set_fact:
+    aap_vm_pipeline_localhost_inventory_id: >-
+      {{ aap_vm_pipeline_localhost_inventory_lookup.json.results[0].id | int }}
+
+- name: Look up localhost host in AIOps Localhost inventory
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_vm_pipeline_controller_host }}/api/controller/v2/hosts/?name=localhost&inventory={{
+      aap_vm_pipeline_localhost_inventory_id }}
+    method: GET
+    user: "{{ aap_vm_pipeline_controller_username }}"
+    password: "{{ aap_vm_pipeline_controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_vm_pipeline_validate_certs }}"
+    status_code: 200
+  register: aap_vm_pipeline_localhost_host_lookup
+
+- name: Create localhost host in AIOps Localhost inventory when missing
+  ansible.builtin.uri:
+    url: "{{ aap_vm_pipeline_controller_host }}/api/controller/v2/hosts/"
+    method: POST
+    user: "{{ aap_vm_pipeline_controller_username }}"
+    password: "{{ aap_vm_pipeline_controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_vm_pipeline_validate_certs }}"
+    body_format: json
+    body:
+      name: localhost
+      inventory: "{{ aap_vm_pipeline_localhost_inventory_id }}"
+      variables: "{{ {'ansible_connection': 'local'} | to_json }}"
+    status_code: [201, 400, 403]
+  register: aap_vm_pipeline_localhost_host_create
+  when: aap_vm_pipeline_localhost_host_lookup.json.count | default(0) == 0
+
+- name: Re-check localhost host after create returned a client error
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_vm_pipeline_controller_host }}/api/controller/v2/hosts/?name=localhost&inventory={{
+      aap_vm_pipeline_localhost_inventory_id }}
+    method: GET
+    user: "{{ aap_vm_pipeline_controller_username }}"
+    password: "{{ aap_vm_pipeline_controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_vm_pipeline_validate_certs }}"
+    status_code: 200
+  register: aap_vm_pipeline_localhost_host_recheck
+  when:
+    - aap_vm_pipeline_localhost_host_create is defined
+    - aap_vm_pipeline_localhost_host_create.status | default(201) == 400
+
+- name: Fail when localhost host could not be created in AIOps Localhost inventory
+  ansible.builtin.fail:
+    msg: >-
+      Could not create host localhost in inventory {{ aap_vm_pipeline_inventory }}
+      (id {{ aap_vm_pipeline_localhost_inventory_id }}) in organization
+      {{ aap_vm_pipeline_organization }} (HTTP
+      {{ aap_vm_pipeline_localhost_host_create.status | default('unknown') }}).
+      Response: {{
+        aap_vm_pipeline_localhost_host_create.json
+        | default(aap_vm_pipeline_localhost_host_create.content | default(''), true)
+      }}.
+      Confirm the AAP operator admin user can manage hosts in this inventory, or create
+      the host manually in the controller UI and re-run.
+  when:
+    - aap_vm_pipeline_localhost_host_create is defined
+    - aap_vm_pipeline_localhost_host_create.status | default(201) != 201
+    - >-
+      aap_vm_pipeline_localhost_host_create.status | default(201) != 400
+      or aap_vm_pipeline_localhost_host_recheck is not defined
+      or aap_vm_pipeline_localhost_host_recheck.json.count | default(0) == 0

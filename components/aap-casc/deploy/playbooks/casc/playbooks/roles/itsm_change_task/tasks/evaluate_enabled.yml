@@ -1,0 +1,16 @@
+---
+- name: Determine whether ITSM change task integration is enabled for this job
+  ansible.builtin.set_fact:
+    itsm_change_task_enabled: >-
+      {{
+        (itsm_change_ref | default('') | string | trim | length > 0)
+        and (itsm_ctask_template_name | default('') | string | trim | length > 0)
+        and (
+          not (itsm_change_task_track_milestones_only | default(false) | bool)
+          or (
+            itsm_ctask_template_name | default('') | string | trim
+            in (itsm_change_task_milestone_ctask_titles | default([]))
+          )
+        )
+      }}
+  when: itsm_change_task_enabled is not defined

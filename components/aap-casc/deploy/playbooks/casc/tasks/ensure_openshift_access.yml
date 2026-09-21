@@ -1,0 +1,61 @@
+---
+- name: Resolve kubeconfig path for OpenShift API access
+  ansible.builtin.set_fact:
+    casc_openshift_kubeconfig_path: >-
+      {{
+        lookup('ansible.builtin.env', 'KUBECONFIG')
+        | default(lookup('ansible.builtin.env', 'HOME') ~ '/.kube/config', true)
+      }}
+
+- name: Ensure kubeconfig directory exists when using OpenShift token extra vars
+  ansible.builtin.file:
+    path: "{{ casc_openshift_kubeconfig_path | dirname }}"
+    state: directory
+    mode: "0700"
+  when:
+    - ocp_host is defined
+    - api_token is defined
+    - ocp_host | string | trim | length > 0
+    - api_token | string | trim | length > 0
+
+- name: Write kubeconfig from OpenShift API token extra vars
+  ansible.builtin.copy:
+    dest: "{{ casc_openshift_kubeconfig_path }}"
+    mode: "0600"
+    content: |
+      apiVersion: v1
+      kind: Config
+      clusters:
+        - cluster:
+            server: https://api.{{ ocp_host | string | trim }}:6443
+            insecure-skip-tls-verify: true
+          name: "{{ ocp_host | string | trim }}"
+      contexts:
+        - context:
+            cluster: "{{ ocp_host | string | trim }}"
+            user: "{{ ocp_host | string | trim }}-user"
+          name: "{{ ocp_host | string | trim }}"
+      current-context: "{{ ocp_host | string | trim }}"
+      users:
+        - name: "{{ ocp_host | string | trim }}-user"
+          user:
+            token: "{{ api_token | string | trim }}"
+  no_log: true
+  when:
+    - ocp_host is defined
+    - api_token is defined
+    - ocp_host | string | trim | length > 0
+    - api_token | string | trim | length > 0
+
+- name: Check OpenShift kubeconfig file exists
+  ansible.builtin.stat:
+    path: "{{ casc_openshift_kubeconfig_path }}"
+  register: casc_openshift_kubeconfig_stat
+
+- name: Verify OpenShift API access is configured
+  ansible.builtin.assert:
+    that:
+      - casc_openshift_kubeconfig_stat.stat.exists | default(false)
+    fail_msg: >-
+      OpenShift API access is required. Run `oc login` before this playbook,
+      or pass -e ocp_host=<cluster-domain> -e api_token=<openshift-token>.

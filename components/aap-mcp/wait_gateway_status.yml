@@ -1,0 +1,33 @@
+---
+- name: Wait for AAP gateway connection details in operator status
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_mcp.instance_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_gateway_aap_cr
+  until: >-
+    aap_mcp_gateway_aap_cr.resources | default([]) | length > 0
+    and (aap_mcp_gateway_aap_cr.resources[0].status.URL | default('') | length > 0)
+    and (aap_mcp_gateway_aap_cr.resources[0].status.adminUser | default('') | length > 0)
+    and (aap_mcp_gateway_aap_cr.resources[0].status.adminPasswordSecret | default('') | length > 0)
+  retries: "{{ aap_mcp_gateway_status_retries | default(60) }}"
+  delay: "{{ aap_mcp_gateway_status_delay | default(10) }}"
+  failed_when: false
+
+- name: Fail when AAP gateway connection details are unavailable
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_mcp.instance_name }} in namespace
+      {{ aap_mcp.namespace }} has no status.URL yet. Wait for the AAP operator to
+      finish reconciling the instance (oc describe ansibleautomationplatform
+      {{ aap_mcp.instance_name }} -n {{ aap_mcp.namespace }}).
+  when: >-
+    aap_mcp_gateway_aap_cr.resources | default([]) | length == 0
+    or (aap_mcp_gateway_aap_cr.resources[0].status.URL | default('') | length == 0)
+
+- name: Set AAP gateway connection facts
+  ansible.builtin.set_fact:
+    aap_gateway_url: "{{ aap_mcp_gateway_aap_cr.resources[0].status.URL }}"
+    aap_admin_user: "{{ aap_mcp_gateway_aap_cr.resources[0].status.adminUser }}"
+    aap_admin_password_secret: "{{ aap_mcp_gateway_aap_cr.resources[0].status.adminPasswordSecret }}"

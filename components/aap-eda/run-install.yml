@@ -1,0 +1,22 @@
+---
+# Entry point for ansible-navigator (run from ansible-navigator/):
+#   ansible-navigator run ../components/aap-eda/run-install.yml -m stdout \
+#     -e "ocp_host=$CLUSTER_DOMAIN" -e "api_token=$OPENSHIFT_TOKEN" \
+#     -e "kubeconfig.ocp_domain=$CLUSTER_DOMAIN" -e "kubeconfig.ocp_api_token=$OPENSHIFT_TOKEN"
+- name: Install AAP EDA
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Load ecosystem variables
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../vars.yaml"
+
+    - name: Set repository root for component task includes
+      ansible.builtin.set_fact:
+        aap_eda_repo_root: "{{ playbook_dir }}/../.."
+
+    - name: Install AAP EDA component
+      ansible.builtin.include_tasks:
+        file: install.yaml
+      vars:
+        playbook_dir: "{{ aap_eda_repo_root }}"

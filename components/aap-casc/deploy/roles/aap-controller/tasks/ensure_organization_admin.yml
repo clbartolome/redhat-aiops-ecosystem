@@ -1,0 +1,120 @@
+---
+- name: Fail when platform facts are not loaded
+  ansible.builtin.fail:
+    msg: Run aap-platform-facts before ensuring controller organization admin.
+  when: aap_platform is not defined
+
+- name: Set controller organization name for RBAC assignment
+  ansible.builtin.set_fact:
+    aap_controller_organization_name: >-
+      {{ aap_controller_organization | default(aap_platform.aap.organization) }}
+
+- name: Look up controller organization id for RBAC assignment
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_platform.aap.gateway_url }}/api/controller/v2/organizations/?name={{
+      aap_controller_organization_name | urlencode }}
+    method: GET
+    user: "{{ aap_platform.aap.username }}"
+    password: "{{ aap_platform.aap.password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_controller_validate_certs | default(false) | bool }}"
+    status_code: 200
+  register: aap_controller_org_lookup
+  no_log: true
+
+- name: Fail when controller organization was not found for RBAC assignment
+  ansible.builtin.fail:
+    msg: >-
+      Organization {{ aap_controller_organization_name }} was not found in the
+      controller API. Run aap-casc organization setup before controller pipelines.
+  when: aap_controller_org_lookup.json.count | default(0) == 0
+
+- name: Look up controller user id for RBAC assignment
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_platform.aap.gateway_url }}/api/controller/v2/users/?username={{
+      aap_platform.aap.username | urlencode }}
+    method: GET
+    user: "{{ aap_platform.aap.username }}"
+    password: "{{ aap_platform.aap.password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_controller_validate_certs | default(false) | bool }}"
+    status_code: 200
+  register: aap_controller_user_lookup
+  no_log: true
+
+- name: Fail when controller user was not found for RBAC assignment
+  ansible.builtin.fail:
+    msg: >-
+      Controller user {{ aap_platform.aap.username }} was not found. Verify
+      aap_platform.aap.username matches the AAP admin account.
+  when: aap_controller_user_lookup.json.count | default(0) == 0
+
+- name: Look up controller organization admin role definition
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_platform.aap.gateway_url }}/api/controller/v2/role_definitions/?name={{
+      aap_controller_org_admin_role_definition | urlencode }}
+    method: GET
+    user: "{{ aap_platform.aap.username }}"
+    password: "{{ aap_platform.aap.password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_controller_validate_certs | default(false) | bool }}"
+    status_code: 200
+  register: aap_controller_org_admin_role_lookup
+
+- name: Fail when controller organization admin role definition was not found
+  ansible.builtin.fail:
+    msg: >-
+      Role definition '{{ aap_controller_org_admin_role_definition }}' was not found
+      on the controller API. Set aap_controller_org_admin_role_definition in group_vars
+      (for example Controller Organization Admin) and re-run.
+  when: aap_controller_org_admin_role_lookup.json.count | default(0) == 0
+
+- name: Check for existing controller organization admin role assignment
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_platform.aap.gateway_url }}/api/controller/v2/role_user_assignments/?user={{
+      aap_controller_user_lookup.json.results[0].id }}&object_id={{
+      aap_controller_org_lookup.json.results[0].id }}&role_definition={{
+      aap_controller_org_admin_role_lookup.json.results[0].id }}
+    method: GET
+    user: "{{ aap_platform.aap.username }}"
+    password: "{{ aap_platform.aap.password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_controller_validate_certs | default(false) | bool }}"
+    status_code: 200
+  register: aap_controller_org_admin_assignment_lookup
+
+- name: Grant platform admin controller organization admin on demo organization
+  ansible.builtin.uri:
+    url: "{{ aap_platform.aap.gateway_url }}/api/controller/v2/role_user_assignments/"
+    method: POST
+    user: "{{ aap_platform.aap.username }}"
+    password: "{{ aap_platform.aap.password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_controller_validate_certs | default(false) | bool }}"
+    body_format: json
+    body:
+      role_definition: "{{ aap_controller_org_admin_role_lookup.json.results[0].id }}"
+      user: "{{ aap_controller_user_lookup.json.results[0].id }}"
+      object_id: "{{ aap_controller_org_lookup.json.results[0].id }}"
+    status_code: [201, 400, 403]
+  register: aap_controller_org_admin_assignment_create
+  when: aap_controller_org_admin_assignment_lookup.json.count | default(0) == 0
+
+- name: Fail when controller organization admin role assignment was rejected
+  ansible.builtin.fail:
+    msg: >-
+      Could not assign {{ aap_controller_org_admin_role_definition }} to
+      {{ aap_platform.aap.username }} on organization
+      {{ aap_controller_organization_name }} (HTTP
+      {{ aap_controller_org_admin_assignment_create.status | default('unknown') }}).
+      Response: {{
+        aap_controller_org_admin_assignment_create.json
+        | default(aap_controller_org_admin_assignment_create.content | default(''))
+      }}
+  when:
+    - aap_controller_org_admin_assignment_create is defined
+    - aap_controller_org_admin_assignment_create.status | default(201) not in [201, 400]

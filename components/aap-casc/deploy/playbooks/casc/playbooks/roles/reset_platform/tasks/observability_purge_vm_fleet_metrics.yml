@@ -1,0 +1,128 @@
+---
+- name: Resolve observability Prometheus pod for TSDB maintenance
+  kubernetes.core.k8s_info:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    api_version: v1
+    kind: Pod
+    namespace: "{{ reset_observability_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=prometheus
+  register: reset_observability_prom_pods
+
+- name: Fail when observability Prometheus pod is unavailable for metric purge
+  ansible.builtin.assert:
+    that:
+      - reset_observability_prom_pods.resources | default([]) | length > 0
+    fail_msg: >-
+      No Prometheus pod found in namespace {{ reset_observability_namespace }}.
+      Grafana may continue to show deleted VMs until stale probe_success series are purged.
+
+- name: Set observability Prometheus pod name for TSDB maintenance
+  ansible.builtin.set_fact:
+    reset_observability_prom_pod: "{{ reset_observability_prom_pods.resources[0].metadata.name }}"
+
+- name: Ensure Prometheus admin API is enabled for demo reset metric purge
+  kubernetes.core.k8s:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    state: present
+    merge_type: merge
+    api_version: monitoring.coreos.com/v1
+    kind: Prometheus
+    name: "{{ reset_observability_namespace }}"
+    namespace: "{{ reset_observability_namespace }}"
+    definition:
+      spec:
+        enableAdminAPI: true
+
+- name: Delete stale Apache HTTP probe success metrics from Prometheus TSDB
+  kubernetes.core.k8s_exec:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    namespace: "{{ reset_observability_namespace }}"
+    pod: "{{ reset_observability_prom_pod }}"
+    container: prometheus
+    command: >-
+      /bin/sh -ec "wget -qO- --post-data='match[]=probe_success{job=\"{{ openshift_apache_monitoring_probe_job | default('apache-http') }}\"}'
+      http://localhost:9090/api/v1/admin/tsdb/delete_series"
+  register: reset_prometheus_delete_probe_success
+  until: reset_prometheus_delete_probe_success.rc | default(1) | int == 0
+  retries: "{{ reset_prometheus_purge_wait_retries }}"
+  delay: "{{ reset_prometheus_purge_wait_delay }}"
+  changed_when: true
+
+- name: Delete stale Apache HTTP probe duration metrics from Prometheus TSDB
+  kubernetes.core.k8s_exec:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    namespace: "{{ reset_observability_namespace }}"
+    pod: "{{ reset_observability_prom_pod }}"
+    container: prometheus
+    command: >-
+      /bin/sh -ec "wget -qO- --post-data='match[]=probe_duration_seconds{job=\"{{ openshift_apache_monitoring_probe_job | default('apache-http') }}\"}'
+      http://localhost:9090/api/v1/admin/tsdb/delete_series"
+  changed_when: true
+
+- name: Delete stale KubeVirt VMI metrics for demo namespace from Prometheus TSDB
+  kubernetes.core.k8s_exec:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    namespace: "{{ reset_observability_namespace }}"
+    pod: "{{ reset_observability_prom_pod }}"
+    container: prometheus
+    command: >-
+      /bin/sh -ec "wget -qO- --post-data='match[]={__name__=~\"kubevirt_vmi_.+\",namespace=\"{{ reset_gitops_dest_namespace }}\"}'
+      http://localhost:9090/api/v1/admin/tsdb/delete_series"
+  changed_when: true
+
+- name: Clean Prometheus TSDB tombstones after demo VM metric purge
+  kubernetes.core.k8s_exec:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    namespace: "{{ reset_observability_namespace }}"
+    pod: "{{ reset_observability_prom_pod }}"
+    container: prometheus
+    command: >-
+      /bin/sh -ec "wget -qO- --post-data='' http://localhost:9090/api/v1/admin/tsdb/clean_tombstones"
+  changed_when: true
+
+- name: Set PromQL query for remaining Apache HTTP probe_success series
+  ansible.builtin.set_fact:
+    reset_prometheus_probe_success_count_promql: >-
+      count(probe_success{job="{{ openshift_apache_monitoring_probe_job | default('apache-http') }}"}) or vector(0)
+
+- name: Wait for stale Apache HTTP probe metrics to disappear from Prometheus
+  kubernetes.core.k8s_exec:
+    host: "{{ openshift_credential_host | default(omit) }}"
+    api_key: "{{ openshift_credential_token | default(omit) }}"
+    validate_certs: false
+    namespace: "{{ reset_observability_namespace }}"
+    pod: "{{ reset_observability_prom_pod }}"
+    container: prometheus
+    command: >-
+      /bin/sh -ec "wget -qO- 'http://localhost:9090/api/v1/query?query={{
+      reset_prometheus_probe_success_count_promql | urlencode }}' | grep -Eq '\"value\":\\[[0-9.eE+-]+,\"0\"\\]'"
+  register: reset_prometheus_probe_metric_count
+  until: reset_prometheus_probe_metric_count.rc | default(1) | int == 0
+  retries: "{{ reset_prometheus_purge_wait_retries }}"
+  delay: "{{ reset_prometheus_purge_wait_delay }}"
+  changed_when: false
+
+- name: Summarize observability Prometheus VM fleet metric purge
+  ansible.builtin.debug:
+    msg:
+      - >-
+        Remaining {{ openshift_apache_monitoring_probe_job | default('apache-http') }}
+        probe_success series in {{ reset_observability_namespace }} Prometheus: {{
+          reset_prometheus_probe_metric_count.stdout
+          | default('', true)
+          | regex_search('\"value\":\[[0-9.eE+-]+,\"([0-9]+)\"\]', '\1')
+          | default('0')
+        }}

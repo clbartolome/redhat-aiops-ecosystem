@@ -1,0 +1,115 @@
+---
+- name: Delete stored AAP MCP token when recreation is requested
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_mcp.token_secret_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  when: aap_mcp.recreate_token_on_install | default(false) | bool
+
+- name: Use AAP MCP token from vars
+  ansible.builtin.set_fact:
+    aap_mcp_token_value: "{{ aap_mcp.token }}"
+  when: aap_mcp.token | default('') | length > 0
+
+- name: Look up stored AAP MCP token secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ aap_mcp.token_secret_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_token_secret
+  when:
+    - aap_mcp.token | default('') | length == 0
+    - not (aap_mcp.recreate_token_on_install | default(false) | bool)
+
+- name: Load stored AAP MCP token value
+  ansible.builtin.set_fact:
+    aap_mcp_token_value: "{{ aap_mcp_token_secret.resources[0].data.token | b64decode }}"
+  no_log: true
+  when:
+    - aap_mcp.token | default('') | length == 0
+    - not (aap_mcp.recreate_token_on_install | default(false) | bool)
+    - aap_mcp_token_secret.resources | default([]) | length > 0
+
+- name: Validate stored AAP MCP token against gateway API
+  ansible.builtin.uri:
+    url: "{{ aap_gateway_url }}/api/gateway/v1/me/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_mcp_token_value }}"
+    validate_certs: "{{ aap_mcp.validate_certs | default(false) | bool }}"
+    status_code: [200]
+  register: aap_mcp_existing_token_probe
+  failed_when: false
+  no_log: true
+  when:
+    - aap_mcp.token | default('') | length == 0
+    - not (aap_mcp.recreate_token_on_install | default(false) | bool)
+    - aap_mcp_token_value is defined
+
+- name: Mark stored AAP MCP token for recreation when gateway rejects it
+  ansible.builtin.set_fact:
+    aap_mcp_token_needs_recreation: true
+  when:
+    - aap_mcp_existing_token_probe is defined
+    - aap_mcp_existing_token_probe.status | default(0) != 200
+
+- name: Create or refresh AAP MCP OAuth token
+  when:
+    - aap_mcp.token | default('') | length == 0
+    - (aap_mcp.recreate_token_on_install | default(false) | bool)
+      or (aap_mcp_token_secret.resources | default([]) | length == 0)
+      or (aap_mcp_token_needs_recreation | default(false) | bool)
+  block:
+    - name: Get AAP admin password for MCP token creation
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: "{{ aap_admin_password_secret }}"
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_mcp_admin_secret
+
+    - name: Create OAuth token via platform gateway API
+      ansible.builtin.uri:
+        url: "{{ aap_gateway_url }}/api/gateway/v1/tokens/"
+        method: POST
+        user: "{{ aap_admin_user }}"
+        password: "{{ aap_mcp_admin_secret.resources[0].data.password | b64decode }}"
+        force_basic_auth: true
+        validate_certs: "{{ aap_mcp.validate_certs | default(false) | bool }}"
+        body_format: json
+        body:
+          description: "{{ aap_mcp.token_description }}"
+          scope: "{{ aap_mcp.token_scope }}"
+        status_code: [200, 201]
+      register: aap_mcp_token_response
+      no_log: true
+
+    - name: Set refreshed AAP MCP token value
+      ansible.builtin.set_fact:
+        aap_mcp_token_value: "{{ aap_mcp_token_response.json.token }}"
+      no_log: true
+
+    - name: Store AAP MCP token in secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ aap_mcp.token_secret_name }}"
+            namespace: "{{ aap_mcp.namespace }}"
+          type: Opaque
+          stringData:
+            token: "{{ aap_mcp_token_value }}"
+      no_log: true
+
+- name: Fail when AAP MCP token is unavailable
+  ansible.builtin.fail:
+    msg: >-
+      AAP MCP token could not be resolved. Set aap_mcp.token in vars.yaml,
+      enable aap_mcp.recreate_token_on_install, or ensure the gateway API is
+      reachable at {{ aap_gateway_url }}.
+  when: aap_mcp_token_value is not defined

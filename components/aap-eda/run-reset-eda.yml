@@ -1,0 +1,45 @@
+---
+# Reset EDA database and encryption keys after Fernet/InvalidToken failures.
+# Run from ansible-navigator/:
+#   ansible-navigator run ../components/aap-eda/run-reset-eda.yml -m stdout \
+#     -e "ocp_host=$CLUSTER_DOMAIN" -e "api_token=$OPENSHIFT_TOKEN"
+- name: Reset AAP EDA database and encryption keys
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Load ecosystem variables
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../vars.yaml"
+
+    - name: Set repository root for component task includes
+      ansible.builtin.set_fact:
+        aap_eda_repo_root: "{{ playbook_dir }}/../.."
+
+    - name: Ensure OpenShift API access is available
+      ansible.builtin.include_tasks:
+        file: "{{ aap_eda_repo_root }}/components/aap-casc/deploy/playbooks/casc/tasks/ensure_openshift_access.yml"
+
+    - name: Reset EDA database and operator-managed secrets
+      ansible.builtin.include_tasks:
+        file: "{{ aap_eda_repo_root }}/components/aap-eda/eda_database_reset.yml"
+      vars:
+        playbook_dir: "{{ aap_eda_repo_root }}"
+
+    - name: Reconcile EDA after database reset
+      ansible.builtin.include_tasks:
+        file: "{{ aap_eda_repo_root }}/components/aap-eda/eda_reconcile_reset.yml"
+      vars:
+        playbook_dir: "{{ aap_eda_repo_root }}"
+
+    - name: Wait for ansible-eda-api Deployment after reset
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ aap_eda.instance_name }}-eda-api"
+        namespace: "{{ aap_eda.namespace }}"
+      register: aap_eda_reset_api_wait
+      until:
+        - aap_eda_reset_api_wait.resources | default([]) | length > 0
+        - aap_eda_reset_api_wait.resources[0].status.availableReplicas | default(0) | int > 0
+      retries: "{{ aap_eda_api_deployment_wait_retries | default(90) }}"
+      delay: "{{ aap_eda_deployment_wait_delay | default(15) }}"

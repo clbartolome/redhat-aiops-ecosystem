@@ -1,0 +1,6 @@
+---
+- name: Wait for SSH connectivity to target VM
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ apache_app_ssh_wait_timeout | default(300) }}"
+    delay: "{{ apache_app_ssh_wait_delay | default(5) }}"
+    sleep: "{{ apache_app_ssh_wait_sleep | default(5) }}"

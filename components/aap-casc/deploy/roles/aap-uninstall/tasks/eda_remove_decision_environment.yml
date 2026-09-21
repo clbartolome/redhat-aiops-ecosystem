@@ -1,0 +1,28 @@
+---
+- name: Lookup {{ aap_eda_pipeline_decision_environment }} decision environment in EDA
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/eda/v1/decision-environments/?name={{
+      aap_eda_pipeline_decision_environment | urlencode }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: 200
+    return_content: true
+  register: eda_uninstall_decision_environment_lookup
+
+- name: Remove {{ aap_eda_pipeline_decision_environment }} decision environment from EDA
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_uninstall_controller_host }}/api/eda/v1/decision-environments/{{
+      item.id }}/?force=True
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ aap_uninstall_controller_oauthtoken }}"
+    validate_certs: "{{ aap_uninstall_validate_certs }}"
+    status_code: [202, 204]
+  loop: "{{ eda_uninstall_decision_environment_lookup.json.results | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: eda_uninstall_decision_environment_lookup.json.count | default(0) | int > 0

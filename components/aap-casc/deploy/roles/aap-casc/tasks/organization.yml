@@ -40,3 +40,10 @@
   until: aap_casc_controller_orgs.json.count | default(0) > 0
   retries: 15
   delay: 2
+
+- name: Ensure platform admin can manage AIOps organization in controller
+  ansible.builtin.include_role:
+    name: aap-controller
+    tasks_from: ensure_organization_admin.yml
+  vars:
+    aap_controller_organization: "{{ aap_casc_organization }}"

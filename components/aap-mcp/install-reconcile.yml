@@ -1,0 +1,167 @@
+---
+- name: Enable MCP on Ansible Automation Platform instance
+  kubernetes.core.k8s:
+    state: present
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_mcp.instance_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+    merge_type: merge
+    definition: "{{ lookup('template', playbook_dir ~ '/components/aap-mcp/mcp-spec.yaml.j2') | from_yaml }}"
+
+- name: Read Ansible Automation Platform after enabling MCP
+  kubernetes.core.k8s_info:
+    api_version: aap.ansible.com/v1alpha1
+    kind: AnsibleAutomationPlatform
+    name: "{{ aap_mcp.instance_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_instance_after_enable
+
+- name: Fail when MCP remains disabled on AnsibleAutomationPlatform
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleAutomationPlatform/{{ aap_mcp.instance_name }} still has
+      spec.mcp.disabled=true after install patch. Inspect the AAP operator and
+      CR status with: oc describe ansibleautomationplatform {{ aap_mcp.instance_name }}
+      -n {{ aap_mcp.namespace }}
+  when: aap_mcp_instance_after_enable.resources[0].spec.mcp.disabled | default(false) | bool
+
+- name: Set AAP MCP custom resource and deployment names
+  ansible.builtin.set_fact:
+    aap_mcp_cr_name: "{{ aap_mcp.instance_name }}-mcp"
+    aap_mcp_deployment_name: "{{ aap_mcp.instance_name }}-mcp"
+    aap_mcp_cr_present: false
+
+- name: Wait for AnsibleMCPServer custom resource
+  kubernetes.core.k8s_info:
+    api_version: mcpserver.ansible.com/v1alpha1
+    kind: AnsibleMCPServer
+    name: "{{ aap_mcp_cr_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_cr_info
+  until: aap_mcp_cr_info.resources | default([]) | length > 0
+  retries: "{{ aap_mcp_cr_wait_retries | default(30) }}"
+  delay: "{{ aap_mcp_cr_wait_delay | default(10) }}"
+  failed_when: false
+
+- name: Set AnsibleMCPServer custom resource presence after initial wait
+  ansible.builtin.set_fact:
+    aap_mcp_cr_present: "{{ aap_mcp_cr_info.resources | default([]) | length > 0 }}"
+
+- name: Reset stuck MCP enablement with disable and re-enable cycle
+  when: not aap_mcp_cr_present | bool
+  block:
+    - name: Temporarily disable MCP to reset operator reconciliation
+      kubernetes.core.k8s:
+        state: present
+        api_version: aap.ansible.com/v1alpha1
+        kind: AnsibleAutomationPlatform
+        name: "{{ aap_mcp.instance_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+        merge_type: merge
+        definition:
+          spec:
+            mcp:
+              disabled: true
+
+    - name: Remove lingering AnsibleMCPServer custom resource during reconcile reset
+      kubernetes.core.k8s:
+        state: absent
+        api_version: mcpserver.ansible.com/v1alpha1
+        kind: AnsibleMCPServer
+        name: "{{ aap_mcp_cr_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+        wait: true
+        wait_timeout: 120
+      failed_when: false
+
+    - name: Wait for AAP MCP Deployment removal during reconcile reset
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ aap_mcp_deployment_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_mcp_reset_deployment_wait
+      until: aap_mcp_reset_deployment_wait.resources | default([]) | length == 0
+      retries: 18
+      delay: 10
+      failed_when: false
+
+    - name: Re-enable MCP on Ansible Automation Platform instance
+      kubernetes.core.k8s:
+        state: present
+        api_version: aap.ansible.com/v1alpha1
+        kind: AnsibleAutomationPlatform
+        name: "{{ aap_mcp.instance_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+        merge_type: merge
+        definition: "{{ lookup('template', playbook_dir ~ '/components/aap-mcp/mcp-spec.yaml.j2') | from_yaml }}"
+
+    - name: Wait for AnsibleMCPServer custom resource after reconcile reset
+      kubernetes.core.k8s_info:
+        api_version: mcpserver.ansible.com/v1alpha1
+        kind: AnsibleMCPServer
+        name: "{{ aap_mcp_cr_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_mcp_cr_info
+      until: aap_mcp_cr_info.resources | default([]) | length > 0
+      retries: "{{ aap_mcp_cr_wait_retries | default(30) }}"
+      delay: "{{ aap_mcp_cr_wait_delay | default(10) }}"
+      failed_when: false
+
+    - name: Set AnsibleMCPServer custom resource presence after reconcile reset
+      ansible.builtin.set_fact:
+        aap_mcp_cr_present: "{{ aap_mcp_cr_info.resources | default([]) | length > 0 }}"
+
+- name: List AnsibleMCPServer custom resources when expected name is missing
+  when: not aap_mcp_cr_present | bool
+  kubernetes.core.k8s_info:
+    api_version: mcpserver.ansible.com/v1alpha1
+    kind: AnsibleMCPServer
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_cr_list
+
+- name: Resolve AnsibleMCPServer custom resource name from cluster inventory
+  ansible.builtin.set_fact:
+    aap_mcp_cr_name: "{{ aap_mcp_cr_list.resources[0].metadata.name }}"
+    aap_mcp_deployment_name: "{{ aap_mcp_cr_list.resources[0].metadata.name }}"
+    aap_mcp_cr_info: "{{ aap_mcp_cr_list }}"
+    aap_mcp_cr_present: true
+  when:
+    - not aap_mcp_cr_present | bool
+    - aap_mcp_cr_list.resources | default([]) | length > 0
+
+- name: Fail when AnsibleMCPServer custom resource is still missing
+  ansible.builtin.fail:
+    msg: >-
+      AnsibleMCPServer/{{ aap_mcp_cr_name }} was not created in namespace
+      {{ aap_mcp.namespace }} after enabling spec.mcp.disabled=false.
+      Check AAP operator logs and CR status:
+      oc describe ansibleautomationplatform {{ aap_mcp.instance_name }} -n {{ aap_mcp.namespace }}
+      oc get ansiblemcpserver -n {{ aap_mcp.namespace }}
+  when: not aap_mcp_cr_present | bool
+
+- name: Wait for AAP MCP Deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ aap_mcp_deployment_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_deployment
+  until:
+    - aap_mcp_deployment.resources | default([]) | length > 0
+    - aap_mcp_deployment.resources[0].status.availableReplicas | default(0) | int > 0
+  retries: "{{ aap_mcp_deployment_wait_retries | default(30) }}"
+  delay: "{{ aap_mcp_deployment_wait_delay | default(10) }}"
+
+- name: Wait for AAP MCP Route
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: "{{ aap_mcp_deployment_name }}"
+    namespace: "{{ aap_mcp.namespace }}"
+  register: aap_mcp_route
+  until: aap_mcp_route.resources | length > 0
+  retries: 12
+  delay: 10
+  failed_when: false

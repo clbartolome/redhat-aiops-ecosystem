@@ -1,0 +1,5 @@
+---
+# Entry point for ansible-navigator (run from ansible-navigator/ or deploy/):
+#   ansible-navigator run ../components/aap-casc/deploy/run-uninstall.yml -m stdout \
+#     -e "ocp_host=$CLUSTER_DOMAIN" -e "api_token=$OPENSHIFT_TOKEN"
+- import_playbook: playbooks/casc/uninstall-aap-aiops.yml

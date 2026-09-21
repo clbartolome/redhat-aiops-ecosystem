@@ -1,0 +1,116 @@
+---
+- name: Recreate and synchronize AAP MCP token with agent
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars.yaml
+  tasks:
+    - name: Ensure OpenShift API access is available
+      ansible.builtin.include_tasks:
+        file: components/aap-casc/deploy/playbooks/casc/tasks/ensure_openshift_access.yml
+
+    - name: Read Ansible Automation Platform instance for gateway access
+      kubernetes.core.k8s_info:
+        api_version: aap.ansible.com/v1alpha1
+        kind: AnsibleAutomationPlatform
+        name: "{{ aap_mcp.instance_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_mcp_aap_instance
+
+    - name: Fail when Ansible Automation Platform instance is missing
+      ansible.builtin.fail:
+        msg: >-
+          AnsibleAutomationPlatform/{{ aap_mcp.instance_name }} not found in
+          namespace {{ aap_mcp.namespace }}.
+      when: aap_mcp_aap_instance.resources | default([]) | length == 0
+
+    - name: Wait for AAP gateway status and set connection facts
+      ansible.builtin.include_tasks:
+        file: components/aap-mcp/wait_gateway_status.yml
+
+    - name: Resolve AAP MCP deployment name
+      kubernetes.core.k8s_info:
+        api_version: mcpserver.ansible.com/v1alpha1
+        kind: AnsibleMCPServer
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_mcp_sync_cr_list
+
+    - name: Set AAP MCP service facts
+      ansible.builtin.set_fact:
+        aap_mcp_cr_name: "{{ aap_mcp_sync_cr_list.resources[0].metadata.name }}"
+        aap_mcp_deployment_name: "{{ aap_mcp_sync_cr_list.resources[0].metadata.name }}"
+      when: aap_mcp_sync_cr_list.resources | default([]) | length > 0
+
+    - name: Set default AAP MCP deployment name
+      ansible.builtin.set_fact:
+        aap_mcp_cr_name: "{{ aap_mcp.instance_name }}-mcp"
+        aap_mcp_deployment_name: "{{ aap_mcp.instance_name }}-mcp"
+      when: aap_mcp_deployment_name is not defined
+
+    - name: Get AAP MCP Service
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Service
+        name: "{{ aap_mcp_deployment_name }}"
+        namespace: "{{ aap_mcp.namespace }}"
+      register: aap_mcp_sync_service
+
+    - name: Set AAP MCP service port
+      ansible.builtin.set_fact:
+        aap_mcp_service_port: >-
+          {{
+            (
+              aap_mcp_sync_service.resources[0].spec.ports
+              | selectattr('name', 'equalto', 'http')
+              | map(attribute='port')
+              | list
+              | first
+            )
+            | default(aap_mcp_sync_service.resources[0].spec.ports[0].port, true)
+          }}
+      when: aap_mcp_sync_service.resources | default([]) | length > 0
+
+    - name: Set default AAP MCP URL
+      ansible.builtin.set_fact:
+        aap_mcp_effective_url: >-
+          {{
+            aap_mcp.url
+            | default(
+                'http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc:'
+                ~ (aap_mcp_service_port | default(aap_mcp.port | default(8086)) | string) ~ '/mcp/',
+                true
+              )
+          }}
+
+    - name: Force AAP MCP token recreation for sync playbook
+      ansible.builtin.set_fact:
+        aap_mcp: >-
+          {{
+            aap_mcp | combine({
+              'recreate_token_on_install': true,
+              'url': aap_mcp_effective_url
+            }, recursive=True)
+          }}
+
+    - name: Recreate AAP MCP OAuth token
+      ansible.builtin.include_tasks:
+        file: components/aap-mcp/ensure_token.yml
+
+    - name: Propagate refreshed AAP MCP connection details
+      ansible.builtin.set_fact:
+        aap_mcp: >-
+          {{
+            aap_mcp | combine({
+              'port': aap_mcp_service_port | default(aap_mcp.port | default(8086)),
+              'url': aap_mcp_effective_url,
+              'token': aap_mcp_token_value
+            }, recursive=True)
+          }}
+
+    - name: Synchronize AAP MCP token with agent
+      ansible.builtin.include_tasks:
+        file: components/agent/sync_aap_mcp_token.yml
+
+    - name: Test AAP MCP token and connectivity
+      ansible.builtin.include_tasks:
+        file: components/aap-mcp/test_connectivity.yml
