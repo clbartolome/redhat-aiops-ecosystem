@@ -1,0 +1,27 @@
+apiVersion: monitoring.rhobs/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: kubevirt-vmi
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  jobName: kubevirt-vmi
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  scheme: HTTPS
+  tlsConfig:
+    insecureSkipVerify: true
+  kubernetesSDConfigs:
+    - role: Endpoints
+      namespaces:
+        names:
+          - openshift-cnv
+  relabelings:
+    - action: keep
+      sourceLabels: [__meta_kubernetes_service_label_prometheus_kubevirt_io]
+      regex: "true"
+    - action: keep
+      sourceLabels: [__meta_kubernetes_endpoint_port_name]
+      regex: metrics

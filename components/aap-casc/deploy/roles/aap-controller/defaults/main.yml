@@ -1,5 +1,6 @@
 ---
 aap_controller_token_description: aap-casc ansible automation
 aap_controller_token_scope: write
-aap_controller_org_admin_role_definition: Controller Organization Admin
+# AAP 2.7+ uses platform role names (Controller Organization Admin was removed).
+aap_controller_org_admin_role_definition: Organization Admin
 aap_controller_api_prefix: /api/controller/

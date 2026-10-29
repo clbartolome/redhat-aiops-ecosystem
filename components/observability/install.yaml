@@ -1,4 +1,13 @@
 ---
+- name: Default MonitoringStack name to observability namespace
+  ansible.builtin.set_fact:
+    observability: >-
+      {{
+        observability
+        | combine({'monitoring_stack_name': observability.namespace}, recursive=True)
+      }}
+  when: observability.monitoring_stack_name | default('') | trim | length == 0
+
 - name: Check whether observability namespace already exists
   kubernetes.core.k8s_info:
     api_version: v1
@@ -84,100 +93,20 @@
       observability install (see README).
   when: observability_kafka_crd.resources | length == 0
 
-- name: Check OperatorGroups in observability namespace
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1
-    kind: OperatorGroup
-    namespace: "{{ observability.namespace }}"
-  register: observability_operatorgroups
-
-- name: Remove duplicate Ansible-managed OperatorGroup
-  kubernetes.core.k8s:
-    state: absent
-    api_version: operators.coreos.com/v1
-    kind: OperatorGroup
-    name: observability-prometheus
-    namespace: "{{ observability.namespace }}"
-  when:
-    - observability_operatorgroups.resources | length > 1
-    - observability_operatorgroups.resources | map(attribute='metadata.name') | list is contains('observability-prometheus')
-
-- name: Refresh OperatorGroups after remediation
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1
-    kind: OperatorGroup
-    namespace: "{{ observability.namespace }}"
-  register: observability_operatorgroups
-
-- name: Check for Prometheus Operator subscription
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1alpha1
-    kind: Subscription
-    namespace: "{{ observability.namespace }}"
-  register: observability_prometheus_subscriptions
-
-- name: Apply Prometheus OperatorGroup when none exists
-  kubernetes.core.k8s:
-    state: present
-    namespace: "{{ observability.namespace }}"
-    definition: "{{ lookup('template', playbook_dir ~ '/components/observability/crds/prerequisites/10-operatorgroup.yaml') | from_yaml }}"
-  when: observability_operatorgroups.resources | length == 0
-
-- name: Apply Prometheus Operator subscription when none exists
-  kubernetes.core.k8s:
-    state: present
-    namespace: "{{ observability.namespace }}"
-    definition: "{{ lookup('template', playbook_dir ~ '/components/observability/crds/prerequisites/20-subscription.yaml') | from_yaml }}"
-  when: >-
-    observability_prometheus_subscriptions.resources
-    | selectattr('metadata.name', 'equalto', 'prometheus')
-    | list
-    | length == 0
-
-- name: Wait for Prometheus Operator subscription to install CSV
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1alpha1
-    kind: Subscription
-    name: prometheus
-    namespace: "{{ observability.namespace }}"
-  register: observability_prometheus_subscription
-  until: >-
-    observability_prometheus_subscription.resources | length > 0
-    and observability_prometheus_subscription.resources[0].status.installedCSV is defined
-  retries: 60
-  delay: 10
-
-- name: Wait for Prometheus Operator CSV to succeed
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1alpha1
-    kind: ClusterServiceVersion
-    name: "{{ observability_prometheus_subscription.resources[0].status.installedCSV }}"
-    namespace: "{{ observability.namespace }}"
-  register: observability_prometheus_csv
-  until: >-
-    observability_prometheus_csv.resources | default([])
-    | selectattr('status.phase', 'equalto', 'Succeeded')
-    | list
-    | length > 0
-  retries: 60
-  delay: 10
-
-- name: Check Prometheus Operator CRD is installed
+- name: Check Cluster Observability Operator MonitoringStack CRD is installed
   kubernetes.core.k8s_info:
     api_version: apiextensions.k8s.io/v1
     kind: CustomResourceDefinition
-    name: prometheuses.monitoring.coreos.com
-  register: observability_prometheus_crd
+    name: monitoringstacks.monitoring.rhobs
+  register: observability_coo_crd
 
-- name: Fail when Prometheus Operator is not installed
+- name: Fail when Cluster Observability Operator is not installed
   ansible.builtin.fail:
     msg: >-
-      CRD prometheuses.monitoring.coreos.com is not installed. Install Prometheus
-      Operator 0.56.3 (channel beta) in {{ observability.namespace }} from
-      OperatorHub before running observability install (see README). The namespace
-      must contain exactly one OperatorGroup; inspect OLM resources with:
-      oc get operatorgroup,subscription,csv -n {{ observability.namespace }}.
-  when: observability_prometheus_crd.resources | length == 0
+      CRD monitoringstacks.monitoring.rhobs is not installed. Install Cluster
+      Observability Operator from OperatorHub (All namespaces, automatic updates)
+      before running observability install (see README).
+  when: observability_coo_crd.resources | length == 0
 
 - name: Collect observability stack manifest files
   ansible.builtin.set_fact:
@@ -192,7 +121,7 @@
     - otel
     - loki
     - grafana
-    - prometheus
+    - monitoring
 
 - name: Apply observability manifests
   kubernetes.core.k8s:
@@ -202,42 +131,6 @@
   loop: "{{ observability_manifest_files }}"
   loop_control:
     label: "{{ item | basename }}"
-
-- name: Ensure in-namespace Prometheus monitors the observability suite and Apache probes
-  ansible.builtin.set_fact:
-    observability_monitoring_namespace: "{{ observability.namespace }}"
-
-- name: Ensure in-namespace Prometheus sends alerts to suite Alertmanager
-  kubernetes.core.k8s:
-    state: present
-    merge_type: merge
-    api_version: monitoring.coreos.com/v1
-    kind: Prometheus
-    name: "{{ observability.namespace }}"
-    namespace: "{{ observability.namespace }}"
-    definition:
-      spec:
-        alerting:
-          alertmanagers:
-            - apiVersion: v2
-              name: alertmanager-operated
-              namespace: "{{ observability.namespace }}"
-              port: web
-        serviceMonitorNamespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
-        podMonitorNamespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
-        probeSelector:
-          matchLabels:
-            app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
-        probeNamespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
-        ruleNamespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: "{{ observability_monitoring_namespace }}"
 
 - name: Wait for Kafka cluster
   block:
@@ -287,11 +180,11 @@
           instead, and confirm AMQ Streams (amq-streams) is the installed
           Kafka operator.
 
-- name: Wait for in-namespace Prometheus to become available
+- name: Wait for COO MonitoringStack Prometheus to become available
   kubernetes.core.k8s_info:
-    api_version: monitoring.coreos.com/v1
+    api_version: monitoring.rhobs/v1
     kind: Prometheus
-    name: "{{ observability.namespace }}"
+    name: "{{ observability.monitoring_stack_name }}"
     namespace: "{{ observability.namespace }}"
     wait: true
     wait_condition:
@@ -300,11 +193,23 @@
     wait_timeout: 600
   register: observability_prometheus_ready
 
+- name: Enable Prometheus admin API for demo TSDB maintenance
+  kubernetes.core.k8s:
+    state: present
+    merge_type: merge
+    api_version: monitoring.rhobs/v1
+    kind: Prometheus
+    name: "{{ observability.monitoring_stack_name }}"
+    namespace: "{{ observability.namespace }}"
+    definition:
+      spec:
+        enableAdminAPI: true
+
 - name: Wait for in-namespace Alertmanager workload to become ready
   kubernetes.core.k8s_info:
     api_version: apps/v1
     kind: StatefulSet
-    name: "alertmanager-{{ observability.namespace }}"
+    name: "alertmanager-{{ observability.monitoring_stack_name }}"
     namespace: "{{ observability.namespace }}"
   register: observability_alertmanager_statefulset
   until: >-

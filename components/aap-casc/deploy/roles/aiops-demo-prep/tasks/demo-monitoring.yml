@@ -11,47 +11,6 @@
           openshift.io/user-monitoring: "false"
           argocd.argoproj.io/managed-by: "{{ aap_casc_gitops_instance_name | default('openshift-gitops') }}"
 
-- name: Remove legacy Apache Probe resources still in aiops-demo namespace
-  kubernetes.core.k8s_info:
-    api_version: monitoring.coreos.com/v1
-    kind: Probe
-    namespace: "{{ aiops_demo_namespace }}"
-  register: legacy_aiops_demo_probes
-
-- name: Remove legacy AlertmanagerConfig from aiops-demo
-  kubernetes.core.k8s:
-    state: absent
-    api_version: monitoring.coreos.com/v1alpha1
-    kind: AlertmanagerConfig
-    name: otel-webhook
-    namespace: "{{ aiops_demo_namespace }}"
-
-- name: Remove legacy Alertmanager webhook secret from aiops-demo
-  kubernetes.core.k8s:
-    state: absent
-    api_version: v1
-    kind: Secret
-    name: otel-webhook-auth
-    namespace: "{{ aiops_demo_namespace }}"
-
-- name: Remove legacy Apache Probe resources from aiops-demo namespace
-  kubernetes.core.k8s:
-    state: absent
-    api_version: monitoring.coreos.com/v1
-    kind: Probe
-    name: "{{ item.metadata.name }}"
-    namespace: "{{ aiops_demo_namespace }}"
-  loop: "{{ legacy_aiops_demo_probes.resources | default([]) }}"
-  when: legacy_aiops_demo_probes.resources | default([]) | length > 0
-
-- name: Remove legacy Apache PrometheusRule from aiops-demo namespace
-  kubernetes.core.k8s:
-    state: absent
-    api_version: monitoring.coreos.com/v1
-    kind: PrometheusRule
-    name: apache-http-probes
-    namespace: "{{ aiops_demo_namespace }}"
-
 - name: Apply blackbox exporter manifests for Apache HTTP probes
   kubernetes.core.k8s:
     state: present
