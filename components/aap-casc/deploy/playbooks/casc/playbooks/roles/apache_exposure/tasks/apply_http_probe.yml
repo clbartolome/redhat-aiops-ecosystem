@@ -8,7 +8,7 @@
     api_key: "{{ openshift_credential_token | default(omit) }}"
     validate_certs: false
     state: absent
-    api_version: monitoring.coreos.com/v1
+    api_version: monitoring.rhobs/v1
     kind: Probe
     name: "{{ apache_exposure_vm_name }}-http-probe"
     namespace: "{{ vm_namespace | default('aiops-demo') }}"

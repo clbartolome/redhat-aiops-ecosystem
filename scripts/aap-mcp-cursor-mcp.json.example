@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "aap": {
+      "command": "python3",
+      "args": [
+        "${userHome}/Documents/Projects/redhat-aiops-ecosystem/scripts/aap-mcp-cursor-proxy.py"
+      ],
+      "envFile": "${userHome}/.config/cursor/aap-mcp.env"
+    }
+  }
+}

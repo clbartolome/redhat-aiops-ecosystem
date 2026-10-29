@@ -1,0 +1,27 @@
+apiVersion: monitoring.rhobs/v1alpha1
+kind: MonitoringStack
+metadata:
+  name: "{{ observability.monitoring_stack_name }}"
+  namespace: "{{ observability.namespace }}"
+  labels:
+    app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+spec:
+  logLevel: info
+  retention: 24h
+  alertmanagerConfig:
+    disabled: false
+    # Single-node / compact clusters cannot satisfy default HA anti-affinity (2 replicas).
+    replicas: {{ observability.alertmanager_replicas | default(1) | int }}
+  prometheusConfig:
+    replicas: 1
+    scrapeInterval: 30s
+  resourceSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: "{{ observability.part_of_label }}"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

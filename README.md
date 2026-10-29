@@ -13,7 +13,7 @@ The following operators must be installed in the cluster
 > - Ansible Automation Platform operator: **2.7.0+0.1787240540** (`stable-2.7`) — instance `ansible` **2.7.20260824**
 > - OpenShift GitOps: **1.21.3** (`latest`)
 > - Red Hat OpenShift Streams for Apache Kafka: **3.2.1-10** (`stable`)
-> - Prometheus Operator: **0.56.3** (`beta`, namespace `observability`)
+> - Cluster Observability Operator: **latest** (`stable`, All namespaces)
 > - OpenShift Virtualization: **4.21.16** (`stable`)
 
 Build the Ansible execution environment:cd an

@@ -10,5 +10,5 @@ roleRef:
   name: "{{ observability.namespace }}-prometheus"
 subjects:
   - kind: ServiceAccount
-    name: prometheus
+    name: "{{ observability.monitoring_stack_name }}-prometheus"
     namespace: "{{ observability.namespace }}"

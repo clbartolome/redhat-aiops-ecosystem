@@ -1,5 +1,5 @@
 ---
-apiVersion: monitoring.coreos.com/v1
+apiVersion: monitoring.rhobs/v1
 kind: PrometheusRule
 metadata:
   name: {{ openshift_apache_monitoring_prometheus_rule_name | default('apache-http-probes') }}

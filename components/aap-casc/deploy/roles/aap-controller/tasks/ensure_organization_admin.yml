@@ -69,7 +69,7 @@
     msg: >-
       Role definition '{{ aap_controller_org_admin_role_definition }}' was not found
       on the controller API. Set aap_controller_org_admin_role_definition in group_vars
-      (for example Controller Organization Admin) and re-run.
+      (for AAP 2.7+, use Organization Admin) and re-run.
   when: aap_controller_org_admin_role_lookup.json.count | default(0) == 0
 
 - name: Check for existing controller organization admin role assignment

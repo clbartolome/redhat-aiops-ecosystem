@@ -126,6 +126,9 @@ monitor:
 
 observability:
   namespace: observability
+  monitoring_stack_name: observability
+  # Use 2+ only when you have enough nodes for Alertmanager pod anti-affinity.
+  alertmanager_replicas: 1
   kafka_cluster_name: observability-kafka
   part_of_label: observability
   otel_collector_image: otel/opentelemetry-collector-contrib:0.109.0

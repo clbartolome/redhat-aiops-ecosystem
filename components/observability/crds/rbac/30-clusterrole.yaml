@@ -23,10 +23,11 @@ rules:
     verbs: [get, list, watch]
   - nonResourceURLs: [/metrics, /metrics/cadvisor]
     verbs: [get]
-  - apiGroups: [monitoring.coreos.com]
+  - apiGroups: [monitoring.rhobs]
     resources:
       - servicemonitors
       - podmonitors
       - probes
       - prometheusrules
+      - scrapeconfigs
     verbs: [get, list, watch]
