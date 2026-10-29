@@ -28,7 +28,7 @@
           probe_instance: {{ probe_instance | default('unknown') }}
           summary: {{ alert_summary | default('Apache HTTP probe failed') }}
 
-          Remediation: confirm in chat, then launch AAP job template "Troubleshoot apache application".
+          Remediation: review the incident in the AIOps agent, then launch AAP job template "Troubleshoot apache application".
 
     - name: List open ITSM incidents for idempotency check
       ansible.builtin.uri:

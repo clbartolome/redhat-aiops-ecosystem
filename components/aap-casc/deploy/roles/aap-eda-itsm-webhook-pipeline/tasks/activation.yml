@@ -78,7 +78,7 @@
 - name: Ensure ITSM App Chat rulebook activation is present in EDA
   ansible.eda.rulebook_activation:
     name: "{{ aap_eda_itsm_webhook_pipeline_activation_name }}"
-    description: Post itsm-app incident and service request notifications to chat via AAP (Kafka source)
+    description: Post itsm-app incident and service request notifications to the AIOps agent via AAP (Kafka source)
     organization_name: "{{ aap_eda_itsm_webhook_pipeline_organization }}"
     project_name: "{{ aap_eda_itsm_webhook_pipeline_project }}"
     rulebook_name: "{{ aap_eda_itsm_webhook_pipeline_rulebook }}"

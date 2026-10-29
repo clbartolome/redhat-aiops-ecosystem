@@ -10,9 +10,9 @@ This component configures Ansible Automation Platform objects for the AIOps demo
 | **Troubleshoot apache application** | Remediate Apache incidents (with **Create Apache Alert Incident**) |
 | **Reset** | Tear down demo VMs, ITSM data, and observability probes |
 
-**Event-Driven Ansible (demo observability path):** when `aap_casc.enable_observability_pipelines` is true (default), CASC also configures EDA rulebook activations for Apache Alertmanager alerts and ITSM outbound webhooks to chat, plus AAP log forwarding to the observability stack.
+**Event-Driven Ansible (demo observability path):** when `aap_casc.enable_observability_pipelines` is true (default), CASC also configures EDA rulebook activations for Apache Alertmanager alerts and ITSM outbound webhooks to the AIOps agent (`POST` to `agent.incidents_url`), plus AAP log forwarding to the observability stack.
 
-**Scope:** AAP CASC only. ITSM-app and chat-app are installed by [`components/itsm`](../../itsm) and [`components/chat`](../../chat). This component registers AAP credentials for those services and ships runtime playbooks synced to Gitea.
+**Scope:** AAP CASC only. ITSM-app is installed by [`components/itsm`](../../itsm); the AIOps agent by [`components/agent`](../../agent). This component registers AAP credentials for those services and ships runtime playbooks synced to Gitea.
 
 ## Prerequisites
 
@@ -70,8 +70,8 @@ From `deploy/playbooks/casc/`:
 - `configure-aap-apache-stack-workflow.yml` — master stack workflow
 - `configure-aap-apache-troubleshoot-pipeline.yml` — troubleshoot job templates
 - `configure-aap-eda-pipeline.yml` — EDA Apache alert rulebook activation
-- `configure-aap-eda-itsm-webhook-pipeline.yml` — EDA ITSM webhook → chat activation
-- `configure-aap-itsm-chat-pipeline.yml` — Publish ITSM Chat Notification job template
+- `configure-aap-eda-itsm-webhook-pipeline.yml` — EDA ITSM webhook → agent activation
+- `configure-aap-itsm-chat-pipeline.yml` — Publish ITSM notification job template (POST to agent)
 - `configure-aap-reset-pipeline.yml` — Reset job template
 - `configure-infrastructure-gitops.yml` — Argo CD for Infrastructure VMs
 

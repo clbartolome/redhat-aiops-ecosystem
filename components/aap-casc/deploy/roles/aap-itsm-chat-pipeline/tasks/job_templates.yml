@@ -11,8 +11,6 @@
     survey_enabled: false
     extra_vars: "{{ aap_itsm_chat_pipeline_job_extra_vars }}"
     ask_variables_on_launch: true
-    credentials:
-      - "{{ aap_itsm_chat_pipeline_credential_chat }}"
     controller_host: "{{ aap_itsm_chat_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_itsm_chat_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_itsm_chat_pipeline_validate_certs }}"

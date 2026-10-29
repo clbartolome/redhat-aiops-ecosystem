@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     chat_thread_info_base_url: >-
       {{
-        chat_app_url | default(aap_platform.chat_app.url | default('', true), true)
+        chat_app_url | default(aap_platform.agent.incidents_url | default('', true) | regex_replace('/incidents$', ''), true)
         | regex_replace('/$', '')
       }}
 

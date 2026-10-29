@@ -1,16 +1,11 @@
 ---
-- name: Publish ITSM notification to chat
+- name: Publish ITSM notification to AIOps agent
   hosts: localhost
   gather_facts: false
   vars_files:
     - defaults/main.yml
   tasks:
-    - name: Load chat-app credentials
-      ansible.builtin.include_role:
-        name: common
-        tasks_from: load_chat_credential.yml
-
-    - name: Validate required ITSM chat notification extra vars
+    - name: Validate required ITSM agent notification extra vars
       ansible.builtin.assert:
         that:
           - itsm_chat_event is defined
@@ -22,35 +17,37 @@
         fail_msg: >-
           itsm_chat_event, chat_incident_title, and chat_incident_message are required.
 
-    - name: Resolve chat incidents API URL
+    - name: Resolve agent incidents API URL
       ansible.builtin.set_fact:
-        itsm_chat_incidents_url: >-
+        agent_incidents_url: >-
           {{
-            chat_app_url | default(aap_platform.chat_app.url | default('', true), true)
-            | regex_replace('/$', '')
-            ~ '/incidents'
+            agent_incidents_url | default(
+              aap_platform.agent.incidents_url | default('', true),
+              true
+            )
           }}
 
-    - name: Fail when chat incidents API URL is unavailable
+    - name: Fail when agent incidents API URL is unavailable
       ansible.builtin.fail:
         msg: >-
-          Chat URL is missing. Attach the Chat App credential to the job template
-          or ensure platform facts include chat_app.url.
-      when: itsm_chat_incidents_url | default('') | string | trim | length == 0
+          Agent incidents URL is missing. Set agent.incidents_url in vars.yaml
+          or ensure platform facts include agent.incidents_url.
+      when: agent_incidents_url | default('') | string | trim | length == 0
 
-    - name: Post ITSM notification to chat operations channel
+    - name: Post ITSM notification to agent
       ansible.builtin.uri:
-        url: "{{ itsm_chat_incidents_url }}"
+        url: "{{ agent_incidents_url }}"
         method: POST
+        validate_certs: false
         body_format: json
         body:
           title: "{{ chat_incident_title | string | trim }}"
           message: "{{ chat_incident_message | string | trim }}"
           severity: "{{ chat_incident_severity | default('medium') | string | trim }}"
-        validate_certs: false
-        status_code: [201]
+        status_code: [200, 201, 202, 204]
+      register: itsm_agent_notification_post
 
-    - name: Display published ITSM chat notification
+    - name: Display published ITSM agent notification
       ansible.builtin.debug:
         msg: >-
           [{{ itsm_chat_event | string | trim }}]

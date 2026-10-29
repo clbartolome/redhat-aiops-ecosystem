@@ -91,38 +91,26 @@ gitea:
 
 agent:
   namespace: aiops-tools
-  image: quay.io/calopezb/gen-ai-k8s-playground-agent
-  llm_url: <your-llm-url>
-  llm_api_key: <your-llm-api-key>
-  llm_model: <your-llm-model>
-  llm_timeout: 150
-  tools_timeout: 60
-  ssl_verify: false
-  log_level: INFO
-  trace_db_path: /tmp/agent-traces.db
+  image: quay.io/calopezb/aiops-agent:1.0
+  incidents_url: http://agent.{{ agent.namespace }}.svc:8080/incidents
+  model_name: <your-model-name>
+  model_base_url: <your-llm-base-url>
+  model_api_key: <your-llm-api-key>
   openshift_mcp_url: http://openshift-mcp-server.{{ openshift_mcp.namespace }}.svc:8080/mcp/
+  openshift_mcp_token: ""
+  openshift_mcp_tls_verify: false
+  openshift_mcp_allowed_tools: >-
+    mcp_openshift__namespaces_list,mcp_openshift__pods_get,mcp_openshift__pods_list,mcp_openshift__pods_list_in_namespace,mcp_openshift__pods_log,mcp_openshift__projects_list,mcp_openshift__resources_get,mcp_openshift__resources_list
   aap_mcp_url: "{{ aap_mcp.url | default('http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc:' ~ (aap_mcp.port | default(8086) | string) ~ '/mcp/', true) }}"
   aap_mcp_token: "{{ aap_mcp.token }}"
+  aap_mcp_tls_verify: false
+  aap_mcp_allowed_tools: >-
+    mcp_aap__job_templates_launch_create,mcp_aap__job_templates_list,mcp_aap__job_templates_retrieve,mcp_aap__jobs_list,mcp_aap__jobs_retrieve,mcp_aap__jobs_stdout_retrieve,mcp_aap__workflow_job_templates_launch_create,mcp_aap__workflow_job_templates_list,mcp_aap__workflow_job_templates_retrieve,mcp_aap__workflow_jobs_list,mcp_aap__workflow_jobs_retrieve
   itsm_mcp_url: http://itsm-app.{{ itsm.namespace }}.svc:8000/mcp/
   itsm_mcp_token: "{{ itsm.mcp_token }}"
-
-chat:
-  namespace: "{{ agent.namespace }}"
-  image: quay.io/calopezb/gen-ai-k8s-playground-chat
-  ssl_verify: false
-  log_level: INFO
-  trace_db_path: /tmp/agent-traces.db
-  agent_url: http://agent.{{ agent.namespace }}.svc:8080
-  agent_timeout: 120
-
-monitor:
-  namespace: "{{ agent.namespace }}"
-  image: quay.io/calopezb/gen-ai-k8s-playground-monitor
-  ssl_verify: false
-  log_level: INFO
-  trace_db_path: /tmp/agent-traces.db
-  agent_url: http://agent.{{ agent.namespace }}.svc:8080
-  agent_timeout: 120
+  itsm_mcp_tls_verify: false
+  itsm_mcp_allowed_tools: >-
+    mcp_itsm__create_request,mcp_itsm__get_incident,mcp_itsm__get_kb_article,mcp_itsm__get_request,mcp_itsm__get_request_template,mcp_itsm__list_incidents,mcp_itsm__list_request_templates,mcp_itsm__list_requests,mcp_itsm__rag_search_kb,mcp_itsm__search_kb
 
 observability:
   namespace: observability
@@ -154,5 +142,6 @@ aap_casc:
   controller_api_prefix: /api/controller/
   gitops_instance_name: openshift-gitops
   enable_observability_pipelines: true
+  # EDA consumes aiops.itsm and POSTs to agent.incidents_url (no chat app).
   itsm_chat_webhook_delivery: eda
   public_ah_token: <your-red-hat-automation-hub-offline-token>

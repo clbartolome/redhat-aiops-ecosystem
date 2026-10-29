@@ -13,17 +13,9 @@
       ansible.builtin.include_tasks:
         file: components/aap-casc/deploy/playbooks/casc/uninstall-tasks.yml
 
-    - name: Uninstall monitor
-      ansible.builtin.include_tasks:
-        file: components/monitor/uninstall.yaml
-
     - name: Uninstall observability
       ansible.builtin.include_tasks:
         file: components/observability/uninstall.yaml
-
-    - name: Uninstall chat
-      ansible.builtin.include_tasks:
-        file: components/chat/uninstall.yaml
 
     - name: Uninstall agent
       ansible.builtin.include_tasks:

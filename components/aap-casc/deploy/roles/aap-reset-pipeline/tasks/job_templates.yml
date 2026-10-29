@@ -16,7 +16,6 @@
       - "{{ aap_reset_pipeline_credential_itsm }}"
       - "{{ aap_reset_pipeline_credential_openshift }}"
       - "{{ aap_reset_pipeline_credential_aap }}"
-      - "{{ aap_reset_pipeline_credential_chat }}"
     controller_host: "{{ aap_reset_pipeline_controller_host }}"
     controller_oauthtoken: "{{ aap_reset_pipeline_controller_oauthtoken }}"
     validate_certs: "{{ aap_reset_pipeline_validate_certs }}"

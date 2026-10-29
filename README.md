@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]  
 
-> - OpenShift: **4.21**
+> This demo uses a custom agent developed for this demo named **aiops-agent**. [Here](https://github.com/clbartolome/aiops-agent) is the source repository.
 
 ## Setup
 
@@ -35,7 +35,7 @@ Edit `vars.yaml` and replace every value marked with `<...>`. See `vars.yaml.exa
 
 `ocp_host` and `api_token` are passed at runtime (`-e`); do not put cluster credentials in `vars.yaml`.
 
-Define components in dependency order (`openshift_mcp` → `aap_mcp` → `aap_eda` → `itsm` → `gitea` → `observability` → `agent` → `chat` / `monitor` → `aap_casc`). Downstream blocks reference the ones above (for example, `agent.openshift_mcp_url` from `openshift_mcp`, `agent.aap_mcp_*` from `aap_mcp`, `agent.itsm_mcp_*` from `itsm`, `chat.agent_url` from `agent`). `gitea.host`, `gitea.root_url`, and `observability.grafana.host` are derived from `ocp_host` passed at runtime.
+Define components in dependency order (`openshift_mcp` → `aap_mcp` → `aap_eda` → `itsm` → `gitea` → `observability` → `agent` → `aap_casc`). Downstream blocks reference the ones above (for example, `agent.openshift_mcp_url` from `openshift_mcp`, `agent.aap_mcp_*` from `aap_mcp`, `agent.itsm_mcp_*` from `itsm`, `agent.incidents_url` for EDA → agent notifications). `gitea.host`, `gitea.root_url`, and `observability.grafana.host` are derived from `ocp_host` passed at runtime.
 
 `aap_casc.public_ah_token` is the Red Hat Automation Hub offline token (from [console.redhat.com](https://console.redhat.com/ansible/automation-hub/token)).
 

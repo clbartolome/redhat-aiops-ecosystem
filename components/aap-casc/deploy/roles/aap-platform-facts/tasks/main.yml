@@ -99,9 +99,7 @@
     aap_platform_itsm_username: "{{ itsm.bootstrap_admin_user }}"
     aap_platform_itsm_password: "{{ itsm.bootstrap_admin_password }}"
     aap_platform_itsm_mcp_token: "{{ itsm.mcp_token }}"
-    aap_platform_chat_url: "http://chat.{{ chat.namespace }}.svc:5000"
-    aap_platform_chat_username: "{{ itsm.bootstrap_admin_user }}"
-    aap_platform_chat_password: "{{ itsm.bootstrap_admin_password }}"
+    aap_platform_agent_incidents_url: "{{ agent.incidents_url | default('http://agent.' ~ agent.namespace ~ '.svc:8080/incidents') }}"
     aap_platform_gitops_url: "https://openshift-gitops-server-openshift-gitops.apps.{{ ocp_host }}"
     aap_platform_kafka_bootstrap: >-
       {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092
@@ -138,10 +136,8 @@
         username: "{{ aap_platform_itsm_username }}"
         password: "{{ aap_platform_itsm_password }}"
         mcp_token: "{{ aap_platform_itsm_mcp_token }}"
-      chat_app:
-        url: "{{ aap_platform_chat_url }}"
-        username: "{{ aap_platform_chat_username }}"
-        password: "{{ aap_platform_chat_password }}"
+      agent:
+        incidents_url: "{{ aap_platform_agent_incidents_url }}"
       gitea:
         url: "{{ aap_platform_gitea_url }}"
         username: "{{ aap_platform_gitea_username }}"
