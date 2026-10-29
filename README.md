@@ -1,7 +1,6 @@
 # redhat-aiops-ecosystem
 
 > [!IMPORTANT]  
-
 > This demo uses a custom agent developed for this demo named **aiops-agent**. [Here](https://github.com/clbartolome/aiops-agent) is the source repository.
 
 ## Setup
