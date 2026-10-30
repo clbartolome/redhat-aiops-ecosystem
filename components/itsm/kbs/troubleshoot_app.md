@@ -1,21 +1,54 @@
 # Troubleshoot Apache Application
 
-This article describes the procedure to troubleshoot an apache application.
-
-## Required Information
-
-- vm_name
-- itsm_incident_ref
+Troubleshoot an Apache application running on a Virtual Machine by launching the corresponding Ansible Automation Platform job.
 
 ## Procedure
 
-1. Search the job template called "Troubleshoot apache application" in Ansible Automation Platform.
+**ID:** troubleshoot-apache-application
+**Version:** 1
+**Risk:** low
+**Confirmation required:** yes
 
-2. Launch the Ansible Automation Platform "Troubleshoot apache application" job template passing the following extra_vars:
+## Required information
 
-    - vm_name: Virtual Machine name
-    - itsm_incident_ref: Incident id
+- **Virtual Machine name** — required — Name of the Virtual Machine hosting the Apache application.
+- **ITSM incident reference** — required — ITSM incident identifier associated with the troubleshooting request.
+
+## Steps
+
+### 1. Find the troubleshooting job template
+
+Find the Ansible Automation Platform job template named **Troubleshoot apache application**.
+
+Confirm that the job template exists and can be launched.
+
+If the job template cannot be found, fail the procedure and do not continue.
+
+### 2. Launch the troubleshooting job
+
+Launch the Ansible Automation Platform job template **Troubleshoot apache application** with the following values:
+
+- `vm_name`: **Virtual Machine name**
+- `itsm_incident_ref`: **ITSM incident reference**
+
+Keep the launched job ID for follow-up.
+
+If the job cannot be launched successfully, fail the procedure.
+
+## Success
+
+The procedure is successful when:
+
+- the **Troubleshoot apache application** job template is found
+- the job is launched successfully
+- the ITSM incident reference is passed to the job
+- the launched job ID is available for follow-up
 
 ## Follow up
 
-Keep ITSM incident ID and relevant launched job ID to follow up the request.
+Keep:
+
+- the ITSM incident reference
+- the launched Ansible Automation Platform job ID
+
+Use both identifiers to follow the troubleshooting request.

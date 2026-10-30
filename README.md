@@ -60,6 +60,22 @@ ansible-navigator run ../install.yaml -m stdout \
 
 
 
+### Troubleshooting agent and MCP
+
+**OpenShift MCP URL path:** The Helm `kubernetes-mcp-server` endpoint is `http://openshift-mcp-server.<namespace>.svc.cluster.local:8080/mcp` with **no** trailing slash. A URL ending in `/mcp/` returns HTTP 404 from that server. AAP MCP and ITSM still use a trailing `/mcp/` where their servers expect it.
+
+**Empty `OPENSHIFT_MCP_TOKEN` is normal in-cluster:** The OpenShift MCP pod uses its ServiceAccount (RBAC `view`) for the Kubernetes API. The agent only needs a bearer token when calling MCP over a Route with OAuth passthrough.
+
+**If chat fails before any MCP tool runs:** Check agent logs for `OperationalError: near "RETURNING": syntax error`. The [aiops-agent](https://github.com/clbartolome/aiops-agent) uses `openai-agents` `SQLiteSession`, which requires **SQLite 3.35+** in the container Python (`sqlite3.sqlite_version`). The published `quay.io/calopezb/aiops-agent:1.0` image currently ships SQLite 3.34.1 on UBI, so chat sessions fail and logs show `MCP calls attempted=0`. Rebuild the agent image from a base with SQLite ≥ 3.35 (for example `python:3.12-bookworm`) and set `agent.image` in `vars.yaml`, or wait for an updated image tag.
+
+Quick checks from a running agent pod:
+
+```sh
+oc exec -n aiops-tools deploy/agent -- python3 -c "import sqlite3; print(sqlite3.sqlite_version)"
+oc logs -n aiops-tools deploy/agent | grep 'MCP server='
+oc logs -n aiops-tools deploy/agent | grep -E 'RETURNING|mcp_attempted'
+```
+
 ### Clean-up
 
 Uninstall removes the demo workloads (AAP CASC, ITSM, observability, agent, and so on) but **keeps** Event-Driven Ansible, AAP MCP, and OpenShift MCP. Re-running install skips those components when they are already running; `install.yml` CASC configure still ensures EDA decision environments, projects, and activations exist.
