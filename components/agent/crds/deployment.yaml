@@ -28,13 +28,13 @@ spec:
                 name: agent-config
           readinessProbe:
             httpGet:
-              path: /health
+              path: /api/sessions
               port: http
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /api/sessions
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20

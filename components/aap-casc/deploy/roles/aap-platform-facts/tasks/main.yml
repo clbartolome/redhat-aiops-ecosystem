@@ -95,11 +95,11 @@
     aap_platform_gitea_url: "{{ gitea.root_url | regex_replace('/$', '') }}"
     aap_platform_gitea_username: "{{ gitea.admin_user }}"
     aap_platform_gitea_password: "{{ gitea.admin_password }}"
-    aap_platform_itsm_url: "http://itsm-app.{{ itsm.namespace }}.svc:8000"
+    aap_platform_itsm_url: "http://itsm-app.{{ itsm.namespace }}.svc.cluster.local:8000"
     aap_platform_itsm_username: "{{ itsm.bootstrap_admin_user }}"
     aap_platform_itsm_password: "{{ itsm.bootstrap_admin_password }}"
     aap_platform_itsm_mcp_token: "{{ itsm.mcp_token }}"
-    aap_platform_agent_incidents_url: "{{ agent.incidents_url | default('http://agent.' ~ agent.namespace ~ '.svc:8080/incidents') }}"
+    aap_platform_agent_incidents_url: "{{ agent.incidents_url | default('http://agent.' ~ agent.namespace ~ '.svc.cluster.local:8080/incidents') }}"
     aap_platform_gitops_url: "https://openshift-gitops-server-openshift-gitops.apps.{{ ocp_host }}"
     aap_platform_kafka_bootstrap: >-
       {{ observability.kafka_cluster_name }}-kafka-bootstrap.{{ observability.namespace }}.svc:9092

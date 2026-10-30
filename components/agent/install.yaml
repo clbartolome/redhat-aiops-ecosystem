@@ -35,3 +35,7 @@
   loop: "{{ query('fileglob', playbook_dir ~ '/components/agent/crds/*.yaml') | sort }}"
   loop_control:
     label: "{{ item | basename }}"
+  register: agent_manifest_apply
+  until: agent_manifest_apply is succeeded
+  retries: "{{ agent.manifest_apply_retries | default(5) }}"
+  delay: "{{ agent.manifest_apply_delay | default(15) }}"

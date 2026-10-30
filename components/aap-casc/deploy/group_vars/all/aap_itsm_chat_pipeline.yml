@@ -15,6 +15,6 @@ aap_itsm_chat_pipeline_job_extra_vars:
   chat_incident_title: ""
   chat_incident_message: ""
   chat_incident_severity: ""
-  agent_incidents_url: "{{ agent.incidents_url | default('http://agent.' ~ agent.namespace ~ '.svc:8080/incidents') }}"
+  agent_incidents_url: "{{ agent.incidents_url | default('http://agent.' ~ agent.namespace ~ '.svc.cluster.local:8080/incidents') }}"
 
 aap_itsm_chat_pipeline_credential_chat: Chat App

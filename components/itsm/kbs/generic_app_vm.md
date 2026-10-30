@@ -1,60 +1,78 @@
 # Deploy Generic Application Stack
 
-This article describes the procedure to create a Virtual Machine with an application running on it.
-
-## Required Information
-
-- Virtual Machine name
-- Virtual Machine number of CPUs
-- Virtual Machine memory
-- Application Repository
+Create a Virtual Machine and deploy an application from a Git repository using the Generic Application Stack workflow.
 
 ## Procedure
 
-1. Open and **submit** an ITSM service request using the **Generic-Application-Stack** ITSM template providing the following parameters:
+**ID:** deploy-generic-application-stack
+**Version:** 1
+**Risk:** medium
+**Confirmation required:** yes
 
-    - vm_name: Virtual Machine name
-    - cpus: Virtual Machine number of CPUs
-    - mem: Amount of memory in GiB
-    - app_repo: Git repository in which resides the application code
+## Required information
 
-    Submission creates the linked ITSM change (CHG-*). Do not launch the AAP workflow while the request is still draft.
+- **Virtual Machine name** — required — Name of the Virtual Machine to create.
+- **Virtual Machine CPUs** — required — Number of CPUs assigned to the Virtual Machine.
+- **Virtual Machine memory** — required — Amount of memory assigned to the Virtual Machine in GiB.
+- **Application Repository** — required — Git repository containing the application source code.
 
+## Steps
 
-2. Search the workflow job template called "Deploy Generic Application Stack" in Ansible Automation Platform.
+### 1. Create the ITSM service request
 
+Create and submit an ITSM service request using the **Generic-Application-Stack** service request template.
 
-3. Launch the Ansible Automation Platform "Deploy Generic Application Stack" workflow job template passing the following extra_vars:
+Use the following values:
 
-    - vm_name: Virtual Machine name
-    - cpus: Virtual Machine number of CPUs
-    - mem: Virtual Machine memory (integer)
-    - app_repo: Application Repository
-    - itsm_service_request_ref: Obtained in the step 1
+- `vm_name`: **Virtual Machine name**
+- `cpus`: **Virtual Machine CPUs**
+- `mem`: **Virtual Machine memory**
+- `app_repo`: **Application Repository**
+
+The request must be submitted, not left in draft state.
+
+Keep the created ITSM service request reference because it is required by a later step.
+
+If the service request cannot be created and submitted successfully, fail the procedure and do not continue.
+
+### 2. Launch the deployment workflow
+
+Launch the Ansible Automation Platform workflow job template:
+
+**Deploy Generic Application Stack**
+
+Use the following extra variables:
+
+- `vm_name`: **Virtual Machine name**
+- `cpus`: **Virtual Machine CPUs**
+- `mem`: **Virtual Machine memory**
+- `app_repo`: **Application Repository**
+- `itsm_service_request_ref`: the ITSM service request reference created in step 1
+
+Keep the launched workflow job ID so it can be reported to the user and used for follow-up.
+
+If the workflow cannot be launched successfully, fail the procedure.
+
+## Success
+
+The procedure is successful when:
+
+- the ITSM service request has been submitted successfully
+- the **Deploy Generic Application Stack** workflow job template has been found
+- the workflow has been launched successfully using the requested Virtual Machine and application parameters
+- the ITSM service request reference and launched workflow job ID are available for follow-up
 
 ## Workflow overview
 
-The optimized master workflow runs six job nodes (expected total time ~2–3 minutes):
+The deployment workflow performs the following operations:
 
-1. **Resolve ITSM Change from Request** — resolves `itsm_change_ref` from the service request.
-2. **Provision VM Stack** — pushes the VM manifest (including Service and Route) and syncs Argo CD.
-3. **Register ITSM VM Asset** — discovers VM IPs and registers the asset in ITSM.
-4. **Configure Generic App** — installs packages, deploys the application repository, and starts services on the VM.
-5. **Expose application** and **Register ITSM Generic Application Asset** — run in parallel after configure.
-6. **Complete Generic App Stack** — final ITSM CTASK aggregation and optional chat notification.
-
-ITSM change-task tracking is limited to milestones: Sync Infrastructure VMs, Expose application, and Start application services (final completion node). Prior CTASKs in the ITSM change template are auto-completed before each milestone so sequential ITSM rules are satisfied. When the final milestone completes, the linked change, RITM, and service request move to completed/fulfilled automatically.
+1. **Resolve ITSM Change from Request** — resolves the ITSM change associated with the service request.
+2. **Provision VM Stack** — provisions the Virtual Machine infrastructure and synchronizes it through Argo CD.
+3. **Register ITSM VM Asset** — discovers the Virtual Machine network information and registers the asset in ITSM.
+4. **Configure Generic App** — installs the required packages, deploys the application repository, and starts the application services.
+5. **Expose application** and **Register ITSM Generic Application Asset** — expose the application and register it as an ITSM asset.
+6. **Complete Generic App Stack** — completes the final ITSM tasks and associated request records.
 
 ## Follow up
 
-Keep ITSM service request ID and relevant launched job ID to follow up the request. The workflow resolves the linked ITSM change ID automatically.
-
-## Test plan
-
-After deploying CASC changes, validate in AAP:
-
-1. Launch the full workflow and record per-node duration (compare to previous ~5+ minute runs).
-2. Confirm ITSM CTASKs are updated only for Sync, Expose, and Start milestones.
-3. Confirm SSH to the new VM succeeds without waiting for a full inventory sync.
-4. Confirm the OpenShift Route URL is reachable and the chat thread receives the completion summary when launched from the agent.
-5. Re-run against an existing VM to verify idempotency.
+Use the ITSM service request reference and the launched Ansible Automation Platform workflow job ID to follow the deployment after this procedure completes.

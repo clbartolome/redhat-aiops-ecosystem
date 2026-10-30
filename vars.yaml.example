@@ -91,22 +91,27 @@ gitea:
 
 agent:
   namespace: aiops-tools
+  manifest_apply_retries: 5
+  manifest_apply_delay: 15
   image: quay.io/calopezb/aiops-agent:1.0
-  incidents_url: http://agent.{{ agent.namespace }}.svc:8080/incidents
+  # Requires SQLite >= 3.35 in the agent image (openai-agents SQLiteSession uses RETURNING).
+  # Optional override; do not use agent.namespace inside this block (Ansible recursive template loop).
+  # incidents_url: http://agent.aiops-tools.svc.cluster.local:8080/incidents
   model_name: <your-model-name>
   model_base_url: <your-llm-base-url>
   model_api_key: <your-llm-api-key>
-  openshift_mcp_url: http://openshift-mcp-server.{{ openshift_mcp.namespace }}.svc:8080/mcp/
+  # kubernetes-mcp-server streamable HTTP endpoint (no trailing slash; /mcp/ returns 404)
+  openshift_mcp_url: http://openshift-mcp-server.{{ openshift_mcp.namespace }}.svc.cluster.local:8080/mcp
   openshift_mcp_token: ""
   openshift_mcp_tls_verify: false
   openshift_mcp_allowed_tools: >-
     mcp_openshift__namespaces_list,mcp_openshift__pods_get,mcp_openshift__pods_list,mcp_openshift__pods_list_in_namespace,mcp_openshift__pods_log,mcp_openshift__projects_list,mcp_openshift__resources_get,mcp_openshift__resources_list
-  aap_mcp_url: "{{ aap_mcp.url | default('http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc:' ~ (aap_mcp.port | default(8086) | string) ~ '/mcp/', true) }}"
+  aap_mcp_url: "{{ aap_mcp.url | default('http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc.cluster.local:' ~ (aap_mcp.port | default(8086) | string) ~ '/mcp/', true) }}"
   aap_mcp_token: "{{ aap_mcp.token }}"
   aap_mcp_tls_verify: false
   aap_mcp_allowed_tools: >-
     mcp_aap__job_templates_launch_create,mcp_aap__job_templates_list,mcp_aap__job_templates_retrieve,mcp_aap__jobs_list,mcp_aap__jobs_retrieve,mcp_aap__jobs_stdout_retrieve,mcp_aap__workflow_job_templates_launch_create,mcp_aap__workflow_job_templates_list,mcp_aap__workflow_job_templates_retrieve,mcp_aap__workflow_jobs_list,mcp_aap__workflow_jobs_retrieve
-  itsm_mcp_url: http://itsm-app.{{ itsm.namespace }}.svc:8000/mcp/
+  itsm_mcp_url: http://itsm-app.{{ itsm.namespace }}.svc.cluster.local:8000/mcp/
   itsm_mcp_token: "{{ itsm.mcp_token }}"
   itsm_mcp_tls_verify: false
   itsm_mcp_allowed_tools: >-

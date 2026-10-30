@@ -94,7 +94,7 @@
       {{
         aap_mcp.url
         | default(
-            'http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc:'
+            'http://' ~ aap_mcp.instance_name ~ '-mcp.' ~ aap_mcp.namespace ~ '.svc.cluster.local:'
             ~ (aap_mcp_service_port | default(aap_mcp.port | default(8086)) | string) ~ '/mcp/',
             true
           )
